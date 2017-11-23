@@ -1,2 +1,2 @@
 # ruimte-auto
-Because skynet needs an auto-driver to take over this world
+Because skynet needs an intelligent-driver to take over this world
