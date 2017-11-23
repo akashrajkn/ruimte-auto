@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 
 import torch.utils.data as data_utils
 
@@ -44,25 +45,33 @@ def create_torch_dataset(path=None):
     '''
     # If path is not specified use, the default dataset
     if path is None:
-        path = path = os.path.dirname(__file__) + '/../data/aalborg.csv'
+        path = '/home/akashrajkn/Documents/github_projects/ruimte-auto/data/aalborg.csv'
 
     features, targets = read_dataset(path)
 
     # 80% data is train data
     num_train = int(len(features) * 0.8)
 
-    features_train = torch.FloatTensor(features[:num_train])
-    targets_train = torch.FloatTensor(targets[:num_train])
-    features_test = torch.FloatTensor(features[num_train:])
-    targets_test = torch.FloatTensor(targets[num_train:])
+    features_train = np.array(features[:num_train], dtype=np.float32)
+    targets_train = np.array(targets[:num_train], dtype=np.float32)
 
-    train_data = data_utils.TensorDataset(features_train, targets_train)
-    train_loader = data_utils.DataLoader(train_data, shuffle=True)
+    features_test = np.array(features[num_train:], dtype=np.float32)
+    targets_test = np.array(targets[num_train:], dtype=np.float32)
 
-    test_data = data_utils.TensorDataset(features_test, targets_test)
-    test_loader = data_utils.DataLoader(test_data)
+    return features_train, targets_train, features_test, targets_test
 
-    return train_loader, test_loader
+    # features_train = torch.FloatTensor(features[:num_train])
+    # targets_train = torch.FloatTensor(targets[:num_train])
+    # features_test = torch.FloatTensor(features[num_train:])
+    # targets_test = torch.FloatTensor(targets[num_train:])
+    #
+    # train_data = data_utils.TensorDataset(features_train, targets_train)
+    # train_loader = data_utils.DataLoader(train_data, shuffle=True)
+    #
+    # test_data = data_utils.TensorDataset(features_test, targets_test)
+    # test_loader = data_utils.DataLoader(test_data)
+    #
+    # return train_loader, test_loader
 
 
 if __name__ == '__main__':
