@@ -76,21 +76,30 @@ class MyDriver(Driver):
             control_vec[0][1] = 0
         return control_vec
 
+    def comp_minus1(self, carstate, command): # back up
+        if self.standstill_counter > 260:
+            print("competence level -1 engaged. Back up")
+            command.gear = -1
+            command.accelerator = -.7
+            command.brake = 0
+        if self.standstill_counter > 1000:
+            self.standstill_counter = 10
+
     def comp_0(self, carstate, command): # move
         if abs(carstate.speed_x) < 5:
             self.standstill_counter += 1
         else:
             self.standstill_counter = 0
-        if self.standstill_counter > 50:
+        if self.standstill_counter > 36:
             print("competence level 0 engaged. Move, dammit.")
             command.gear = 1
-            command.accelerator = .3
+            command.accelerator = .5
             command.brake = 0
 
     def comp_1(self, carstate, command): # face the right way
         # don't drive backwards
         if carstate.angle < -70 and carstate.angle > 70:
-            if carstate.speed_x < 40:
+            if carstate.speed_x < 30:
                 command.gear = 1
                 command.accelerator = .2
                 command.brake = 0
@@ -110,7 +119,7 @@ class MyDriver(Driver):
             command.steering = .2
 
     def privilege(self, control):
-        ratio = 2.1 # we find acceleration "ratio" times more important than brake
+        ratio = 1.8 # we find acceleration "ratio" times more important than brake
         if control[0][0]*ratio > control[0][1]:
             control[0][1] = 0
         if control[0][1] > control[0][0]*ratio:
@@ -118,8 +127,6 @@ class MyDriver(Driver):
         return control
 
     def drive(self, carstate: State) -> Command:
-        # steering -1 is right, steering 1 is left
-
         # competence levels:
         # 0 move
         # 1 don't drive backwards on the track
@@ -165,5 +172,15 @@ class MyDriver(Driver):
         # competence level 0
         # move
         self.comp_0(carstate, command)
+
+        # competence level -1
+        # back up if we are facing a wall
+        self.comp_minus1(carstate, command)
+
+        print('-----------------')
+        print("gear", carstate.gear)
+        print("speed", carstate.speed_x)
+        print("acc", command.accelerator)
+        print("standstillcounter", self.standstill_counter)
 
         return command
