@@ -8,10 +8,10 @@ from neural_net import FeedForwardRegression
 
 
 # Hyper Parameters
-input_size = 21
+input_size = 22
 hidden_size = 40
 output_size = 3
-num_epochs = 50
+num_epochs = 1000
 learning_rate = 0.001
 
 # Train and Test datasets
@@ -34,7 +34,7 @@ for epoch in range(num_epochs):
     loss.backward()
     optimizer.step()
 
-    if (epoch+1) % 1000 == 0:
+    if (epoch+1) % 500 == 0:
         print ('Epoch [%d/%d], Loss: %.4f'
                %(epoch+1, num_epochs, loss.data[0]))
 

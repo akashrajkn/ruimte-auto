@@ -27,11 +27,11 @@ def read_dataset(path=None):
             continue
 
         # FIXME: missing values are ignored here
-        if len(row) < 24:
+        if len(row) < 25:
             continue
 
         targets.append([float(i) for i in row[0:3]])
-        features.append([float(i) for i in row[3:24]])
+        features.append([float(i) for i in row[3:25]])
 
     # TODO: Return headers also,
     #       Possible return type, return feature_tuple, targets_tuple.
@@ -43,14 +43,25 @@ def create_torch_dataset(path=None):
     '''
     Create a torch dataset from path
     '''
+
+    features = []
+    targets = []
+
     # If path is not specified use, the default dataset
     if path is None:
-        path = '/home/akashrajkn/Documents/github_projects/ruimte-auto/data/aalborg.csv'
+        realpath = os.path.dirname(os.path.realpath(__file__))
+        data_folder = realpath + '/../../data/'
+        for data_file in os.listdir(data_folder):
+            if data_file.endswith('.csv'):
+                temp_features, temp_targets = read_dataset(data_folder + data_file)
 
-    features, targets = read_dataset(path)
+                features += temp_features
+                targets += temp_targets
 
     # 80% data is train data
-    num_train = int(len(features) * 0.8)
+    # num_train = int(len(features) * 0.8)
+    # All available data is used for training
+    num_train = int(len(features))
 
     features_train = np.array(features[:num_train], dtype=np.float32)
     targets_train = np.array(targets[:num_train], dtype=np.float32)

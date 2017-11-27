@@ -5,7 +5,7 @@ class FeedForwardRegression(nn.Module):
     """
     Regression Model with sigmoid activation function
     """
-    def __init__(self, input_size=21, output_size=3, hidden_size=40):
+    def __init__(self, input_size=22, output_size=3, hidden_size=40):
         super(FeedForwardRegression, self).__init__()
 
         self.i2h = nn.Linear(input_size, hidden_size)
