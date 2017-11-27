@@ -16,8 +16,7 @@ class MyDriver(Driver):
     def __init__(self):
         realpath = os.path.dirname(os.path.realpath(__file__))
 
-        self.stuck = False
-        self.stuck_counter = 0
+        self.standstill_counter = 0
 
         self.nn_model = FeedForwardRegression()
         self.nn_model.load_state_dict(torch.load(realpath + '/../models/neural_net_regression.pkl'))
@@ -77,6 +76,47 @@ class MyDriver(Driver):
             control_vec[0][1] = 0
         return control_vec
 
+    def comp_0(self, carstate, command): # move
+        if abs(carstate.speed_x) < 5:
+            self.standstill_counter += 1
+        else:
+            self.standstill_counter = 0
+        if self.standstill_counter > 50:
+            print("competence level 0 engaged. Move, dammit.")
+            command.gear = 1
+            command.accelerator = .3
+            command.brake = 0
+
+    def comp_1(self, carstate, command): # face the right way
+        # don't drive backwards
+        if carstate.angle < -70 and carstate.angle > 70:
+            if carstate.speed_x < 40:
+                command.gear = 1
+                command.accelerator = .2
+                command.brake = 0
+            else:
+                command.accelerator = 0
+                command.brak = .5
+        if carstate.angle < -70:
+            command.steering = -.5
+        if carstate.angle > 70:
+            command.steering = .5
+
+    def comp_2(self, carstate, command):
+        # if off-track, steer to the track
+        if carstate.distance_from_center > 1:
+            command.steering = -.2
+        if carstate.distance_from_center < -1:
+            command.steering = .2
+
+    def privilege(self, control):
+        ratio = 2.1 # we find acceleration "ratio" times more important than brake
+        if control[0][0]*ratio > control[0][1]:
+            control[0][1] = 0
+        if control[0][1] > control[0][0]*ratio:
+            control[0][0] = 0
+        return control
+
     def drive(self, carstate: State) -> Command:
         # steering -1 is right, steering 1 is left
 
@@ -90,16 +130,15 @@ class MyDriver(Driver):
         # NN_MODEL
         x_test = self.convert_carstate_to_array(carstate)
         predicted = self.nn_model(Variable(torch.from_numpy(x_test))).data.numpy()
-        predicted = self.BAD(predicted, t_acc=.1, t_brak=.35, privilege="acc")
+        #predicted = self.BAD(predicted, t_acc=.1, t_brak=.35, privilege="acc")
+
+        predicted = self.privilege(predicted)
 
         command = Command()
 
         command.accelerator = predicted[0][0]
         command.brake = predicted[0][1]
         command.steering = predicted[0][2]
-
-        # if carstate.rpm < 2500:
-        #     command.gear = carstate.gear - 1
 
         # command = Command()
         # command = self.reservoir_computing(carstate, command)
@@ -110,18 +149,6 @@ class MyDriver(Driver):
         # to do: think of a smart way to change gear
         if carstate.rpm > 2500:
             command.gear = 1 + carstate.gear
-        # if carstate.rpm > 1500 and carstate.rpm < 3000:
-        #     command.gear = 1
-        # if carstate.rpm > 3000 and carstate.rpm < 4000:
-        #     command.gear = 2
-        # if carstate.rpm > 4000 and carstate.rpm < 5000:
-        #     command.gear = 3
-        # if carstate.rpm > 5000 and carstate.rpm < 6000:
-        #     command.gear = 4
-        # if carstate.rpm > 6000 and carstate.rpm < 7000:
-        #     command.gear = 5
-        # if carstate.rpm > 7000:
-        #     command.gear = 6
 
         # determine which competence level is required here
         # low competence levels have higher priority over
@@ -129,58 +156,14 @@ class MyDriver(Driver):
 
         # competence level 2
         # if off-track, get back to the track
-        if carstate.distance_from_center > .95:
-            command.steering = -.3
-        if carstate.distance_from_center < -.95:
-            command.steering = .3
+        self.comp_2(carstate, command)
 
         # competence level 1
-        # don't drive backwards
-        if carstate.angle < -70:
-            command.accelerator = .2
-            command.brake = 0
-            command.gear = 1
-            command.steering = -.5
-        if carstate.angle > 70:
-            command.accelerator = .2
-            command.brake = 0
-            command.gear = 1
-            command.steering = .5
+        # face the right way
+        self.comp_1(carstate, command)
 
         # competence level 0
-        # if stationary; move
-        total_speed = np.sqrt(carstate.speed_x**2+carstate.speed_y**2+carstate.speed_z**2)
-        if total_speed < 2:
-            command.accelerator = .4
-            command.brake = 0
-            command.gear = 1
-
-        # competence level -1
-        # if stuck, get unstuck
-        if command.accelerator > 0 and carstate.speed_x < 1:
-            self.stuck_counter += 1
-        else:
-            self.stuck_counter = 0
-            self.stuck = False
-        if self.stuck_counter > 200:
-            self.stuck = True
-            command.gear = -1
-            command.accelerator = -.4
-
-        print('--------')
-        if self.stuck:
-            print("STUCK!")
-            print(command)
+        # move
+        self.comp_0(carstate, command)
 
         return command
-
-    def check_for_stuck(self, carstate):
-        sensors = self.convert_carstate_to_array(carstate)
-        if abs(command.accelerator) > .1 and carstate.speed_x < 1 and sensors[9] < 2.0:
-            self.stuck_counter += 1
-
-    def am_i_stuck(self):
-        if self.stuck_counter > 100:
-            return True
-        else:
-            return False
