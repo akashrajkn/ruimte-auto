@@ -55,12 +55,35 @@ class MyDriver(Driver):
 
         return carstate_array
 
+    def BAD(self, control_vec, t_acc = .5, t_brak = .5, privilege = "brak"):
+        # Bram Akash Dmitrii
+        # threshold acceleration and braking
+        # acceleration/braking privilege if both are 1
+
+        if control_vec[0][0] > t_acc:
+            control_vec[0][0] = 1
+        else:
+            control_vec[0][0] = 0
+        if control_vec[0][1] > t_brak:
+            control_vec[0][1] = 1
+        else:
+            control_vec[0][1] = 0
+        if privilege == "brak" and control_vec[0][1] == 1:
+            control_vec[0][0] = 0
+        if privilege == "acc" and control_vec[0][0] == 1:
+            control_vec[0][1] = 0
+        return control_vec
+
     def drive(self, carstate: State) -> Command:
         # NN_MODEL
         x_test = self.convert_carstate_to_array(carstate)
         predicted = self.nn_model(Variable(torch.from_numpy(x_test))).data.numpy()
+        predicted = self.BAD(predicted, t_acc=.1, t_brak=.35, privilege="acc")
 
         command = Command()
+
+        print("-------")
+        print(predicted[0])
 
         command.accelerator = predicted[0][0]
         command.brake = predicted[0][1]
