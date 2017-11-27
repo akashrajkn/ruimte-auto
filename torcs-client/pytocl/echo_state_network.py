@@ -1,95 +1,6 @@
 import numpy as np
 import os
 
-import pytocl.preprocess as preprocess
-# import preprocess
-
-# This cell contains PyESN
-# ADJUSTED FOR BRAM AKASH DMITRII (BAD) 17 nov 2017
-
-def squash(a):
-    a = 0.49*a/max(a) # squash to values between 0.01 and 0.99
-    a = a + .5
-    return a
-
-def split_data(data, targets):
-    n_data = len(data)
-
-    n_train = int((len(data) * 0.6))
-    n_cv = int((len(data) * 0.2))
-    n_test = n_data - n_cv - n_train
-
-    # data is not shuffled, because it is supposed to be sequential
-
-    train_data = data[:n_train]
-    train_targets = targets[:n_train]
-
-    cv_data = data[n_train:n_train+n_cv]
-    cv_targets = targets[n_train:n_train+n_cv]
-
-    test_data = data[n_train+n_cv:]
-    test_targets = targets[n_train+n_cv:]
-
-    return [train_data[:,:], train_targets[:,:]], [cv_data[:,:], cv_targets[:,:]], [test_data[:,:], test_targets[:,:]]
-
-def prep_data_for_esn(data, targets):
-    # adds a bias term to training data
-    # squashes the domain of the training data between 0 and 1 (excluding 0 and 1)
-    for d in data:
-        d.append(1.0) # add bias term
-    data = np.asarray(data)
-    for i in range( len(data[0]) - 1 ): # do not squash bias
-        data[:, i] = squash(data[:,i])
-
-    targets = np.asarray(targets)
-    return split_data(data, targets)
-
-def threshold(pred, t_acc, t_brak):
-    # a BAD function
-    if len(pred.shape)>1:
-        for i in range(len(pred[:,0])):
-            if pred[i,0] > t_acc:
-                pred[i,0] = 1
-            else:
-                pred[i,0] = 0
-        for i in range(len(pred[:,1])):
-            if pred[i,1] > t_brak:
-                pred[i,1] = 1
-            else:
-                pred[i,1] = 0
-    else:
-        if pred[0] > t_acc:
-            pred[0] = 1
-        else:
-            pred[0] = 0
-        if pred[1] > t_brak:
-            pred[1] = 1
-        else:
-            pred[1] = 0
-    return pred
-
-def correct_dimensions(s, targetlength):
-    """checks the dimensionality of some numeric argument s, broadcasts it
-       to the specified length if possible.
-
-    Args:
-        s: None, scalar or 1D array
-        targetlength: expected length of s
-
-    Returns:
-        None if s is None, else numpy vector of length targetlength
-    """
-    if s is not None:
-        s = np.array(s)
-        if s.ndim == 0:
-            s = np.array([s] * targetlength)
-        elif s.ndim == 1:
-            if not len(s) == targetlength:
-                raise ValueError("arg must have length " + str(targetlength))
-        else:
-            raise ValueError("Invalid argument")
-    return s
-
 
 class ESN():
 
@@ -128,8 +39,8 @@ class ESN():
         self.spectral_radius = spectral_radius
         self.sparsity = sparsity
         self.noise = noise
-        self.input_shift = correct_dimensions(input_shift, n_inputs)
-        self.input_scaling = correct_dimensions(input_scaling, n_inputs)
+        self.input_shift = self.correct_dimensions(input_shift, n_inputs)
+        self.input_scaling = self.correct_dimensions(input_scaling, n_inputs)
 
         self.teacher_scaling = teacher_scaling
         self.teacher_shift = teacher_shift
@@ -159,6 +70,53 @@ class ESN():
             self.t_acc = self.BAD[0]
             self.t_brak = self.BAD[1]
 
+    def threshold(self, pred, t_acc, t_brak):
+        # a BAD function
+        if len(pred.shape)>1:
+            for i in range(len(pred[:,0])):
+                if pred[i,0] > t_acc:
+                    pred[i,0] = 1
+                else:
+                    pred[i,0] = 0
+            for i in range(len(pred[:,1])):
+                if pred[i,1] > t_brak:
+                    pred[i,1] = 1
+                else:
+                    pred[i,1] = 0
+        else:
+            if pred[0] > t_acc:
+                pred[0] = 1
+            else:
+                pred[0] = 0
+            if pred[1] > t_brak:
+                pred[1] = 1
+            else:
+                pred[1] = 0
+        return pred
+
+    def correct_dimensions(self, s, targetlength):
+        '''
+        checks the dimensionality of some numeric argument s, broadcasts it
+        to the specified length if possible.
+
+        Args:
+            s: None, scalar or 1D array
+            targetlength: expected length of s
+
+        Returns:
+            None if s is None, else numpy vector of length targetlength
+        '''
+        if s is not None:
+            s = np.array(s)
+            if s.ndim == 0:
+                s = np.array([s] * targetlength)
+            elif s.ndim == 1:
+                if not len(s) == targetlength:
+                    raise ValueError("arg must have length " + str(targetlength))
+            else:
+                raise ValueError("Invalid argument")
+        return s
+
     def initweights(self):
         # initialize recurrent weights:
         # begin with a random matrix centered around zero:
@@ -183,19 +141,7 @@ class ESN():
         i.e., computes the next network state by applying the recurrent weights
         to the last state & and feeding in the current input and output patterns
         """
-        import numpy as np
-        # print(np)
-        # print("self.teacher_forcing = ", self.teacher_forcing)
-
-        # print(state.shape)
-        # print(input_pattern.shape)
-        # print(output_pattern.shape)
-        # print("$"*10)
-
-
         if self.teacher_forcing:
-            # print(np)
-            # print("asdfasf")
             preactivation = (np.dot(self.W, state)
                              + np.dot(self.W_in, input_pattern)
                              + np.dot(self.W_feedb, output_pattern))
@@ -296,7 +242,7 @@ class ESN():
             np.dot(extended_states, self.W_out.T)))
 
         if self.BAD:
-            pred_train = threshold(pred_train, self.t_acc, self.t_brak)
+            pred_train = self.threshold(pred_train, self.t_acc, self.t_brak)
 
         if not self.silent:
             print(np.sqrt(np.mean((pred_train - outputs)**2)))
@@ -338,7 +284,7 @@ class ESN():
             outputs[n + 1, :] = self.out_activation(np.dot(self.W_out,
                                                            np.concatenate([states[n + 1, :], inputs[n + 1, :]])))
             if self.BAD:
-                outputs[n+1,:] = threshold(outputs[n+1,:], self.t_acc, self.t_brak)
+                outputs[n+1,:] = self.threshold(outputs[n+1,:], self.t_acc, self.t_brak)
                 # one BAD rule says that if there is both braking and acceleration, braking has privilege
                 if outputs[n+1, 1] == 1:
                     outputs[n+1, 0] = 0
@@ -346,7 +292,7 @@ class ESN():
         return self._unscale_teacher(self.out_activation(outputs[1:]))
 
     def race(self, sens_vec, prev_control, state):
-        """
+        '''
         BAD adjustment; racing for TORCS
 
         pre-condition; the network has been trained
@@ -360,81 +306,15 @@ class ESN():
         prev_control; the previous commands the racer gave as control
         state; the reservoir and its values
         output; a 3d BAD vector of control commands
-        """
+        '''
         import numpy as np
         state = self._update(state, sens_vec, prev_control)
         controls = self.out_activation(np.dot(self.W_out, np.concatenate([state, sens_vec])))
 
         if self.BAD:
-            controls = threshold(controls, self.t_acc, self.t_brak)
+            controls = self.threshold(controls, self.t_acc, self.t_brak)
             # one BAD rule says that if there is both braking and acceleration, braking has privilege
             if controls[0] == 1:
                 controls[1] = 0
 
         return controls, state
-
-
-best_param = [.7, .4, .1, .2]
-
-rng = np.random.RandomState(42)
-best_t = [.85, .35]
-
-spd_data, spd_targets = preprocess.read_dataset(path="/home/akashrajkn/Documents/github_projects/ruimte-auto/data/f-speedway.csv")
-alp_data, alp_targets = preprocess.read_dataset(path="/home/akashrajkn/Documents/github_projects/ruimte-auto/data/alpine-1.csv")
-aal_data, aal_targets = preprocess.read_dataset(path="/home/akashrajkn/Documents/github_projects/ruimte-auto/data/aalborg.csv")
-
-spd_train, spd_cv, spd_test = prep_data_for_esn(spd_data, spd_targets)
-alp_train, alp_cv, alp_test = prep_data_for_esn(alp_data, alp_targets)
-aal_train, aal_cv, aal_test = prep_data_for_esn(aal_data, aal_targets)
-
-spec_rad = best_param[0]
-spars = best_param[0]
-nos = best_param[0]
-tsh = best_param[0]
-
-esn = ESN(n_inputs = 22,
-          n_outputs = 3,
-          n_reservoir = 200,
-          spectral_radius = spec_rad,
-          sparsity = spars,
-          noise = nos,
-          #input_shift = [0,0],
-          #input_scaling = [0.01, 3],
-          #teacher_scaling = .8,
-          teacher_shift = tsh,
-          #out_activation = np.tanh,
-          #inverse_out_activation = np.arctanh,
-          teacher_forcing = True,
-          random_state = rng,
-          silent = True,
-          BAD = best_t )
-
-n_reservoir = 200
-state = np.zeros(n_reservoir)
-control = np.zeros(3)
-
-all_train_data = list(spd_train[0])
-all_train_data.extend(list(aal_train[0]))
-all_train_data.extend(list(alp_train[0]))
-all_train_data = np.asarray(all_train_data)
-all_train_targ = list(spd_train[1])
-all_train_targ.extend(list(aal_train[1]))
-all_train_targ.extend(list(alp_train[1]))
-all_train_targ = np.asarray(all_train_targ)
-
-_ = esn.fit(all_train_data, all_train_targ)
-
-spd_test_sensordata = spd_test[0]
-for i in range(len(spd_test_sensordata)):
-    sens_vec = spd_test_sensordata[i,:]
-    control, state = esn.race(sens_vec, control, state)
-    #print(control)
-
-import dill as pickle
-# import pickle
-def save_object(obj, filename):
-    with open(filename, 'wb') as output:
-        pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
-
-# sample usage
-save_object(esn, 'esn.pkl')
