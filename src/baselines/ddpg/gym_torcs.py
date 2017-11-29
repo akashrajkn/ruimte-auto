@@ -2,7 +2,7 @@ import gym
 from gym import spaces
 import numpy as np
 # from os import path
-import snakeoil3_gym as snakeoil3
+import baselines.ddpg.snakeoil3_gym as snakeoil3
 import numpy as np
 import copy
 import collections as col
@@ -32,7 +32,7 @@ class TorcsEnv:
         else:
             os.system('torcs -nofuel -nolaptime &')
         time.sleep(0.5)
-        os.system('sh autostart.sh')
+        os.system('sh baselines/ddpg/autostart.sh')
         time.sleep(0.5)
 
         """
@@ -48,11 +48,13 @@ class TorcsEnv:
         if throttle is False:
             self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,))
         else:
-            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,))
+            #self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,))
+            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(3,))
 
         if vision is False:
             high = np.array([1., np.inf, np.inf, np.inf, 1., np.inf, 1., np.inf])
             low = np.array([0., -np.inf, -np.inf, -np.inf, 0., -np.inf, 0., -np.inf])
+            #self.observation_space = spaces.Box(low=low, high=high)
             self.observation_space = spaces.Box(low=low, high=high)
         else:
             high = np.array([1., np.inf, np.inf, np.inf, 1., np.inf, 1., np.inf, 255])
@@ -63,7 +65,6 @@ class TorcsEnv:
        #print("Step")
         # convert thisAction to the actual torcs actionstr
         client = self.client
-
         this_action = self.agent_to_torcs(u)
 
         # Apply Action
@@ -134,21 +135,21 @@ class TorcsEnv:
         damage = np.array(obs['damage'])
         rpm = np.array(obs['rpm'])
 
-        progress = 2*sp*np.cos(obs['angle']) - np.abs(sp*np.sin(obs['angle'])) - 0.5*sp * np.abs(obs['trackPos'])
+        progress = sp*np.cos(obs['angle']) - np.abs(sp*np.sin(obs['angle'])) - sp*np.abs(obs['trackPos'])
         reward = progress
 
         # collision detection
         if obs['damage'] - obs_pre['damage'] > 0:
-            reward = -1
+            reward = -10
 
         # Termination judgement #########################
         episode_terminate = False
-        #if (abs(track.any()) > 1 or abs(trackPos) > 1):  # Episode is terminated if the car is out of track
-        #    reward = -200
-        #    episode_terminate = True
-        #    client.R.d['meta'] = True
+        if (abs(track.any()) > 1 or abs(trackPos) > 1):  # Episode is terminated if the car is out of track
+            reward = reward - 40
+            # episode_terminate = True
+            # client.R.d['meta'] = True
 
-        
+
         if self.terminal_judge_start < self.time_step: # Episode terminates if the progress of agent is small
             if progress < self.termination_limit_progress:
                 print("No progress")
@@ -156,7 +157,7 @@ class TorcsEnv:
                 client.R.d['meta'] = True
 
         if np.cos(obs['angle']) < 0: # Episode is terminated if the agent runs backward
-            reward = -1
+            reward = -100
             episode_terminate = True
             client.R.d['meta'] = True
 
@@ -167,10 +168,12 @@ class TorcsEnv:
 
         self.time_step += 1
 
-        if reward<0:
-            reward = -1
+        #if reward<0:
+        #    reward = -1
 
-        return self.get_obs(), reward, client.R.d['meta'], {}
+        print('reward: ', reward)
+        #return self.get_obs(), reward, client.R.d['meta'], {}
+        return self.get_state(), reward, client.R.d['meta'], {}
 
     def reset(self, relaunch=False):
         #print("Reset")
@@ -199,13 +202,17 @@ class TorcsEnv:
         self.last_u = None
 
         self.initial_reset = False
-        return self.get_obs()
+        #return self.get_obs()
+        return self.get_state()
 
     def end(self):
         os.system('pkill torcs')
 
     def get_obs(self):
         return self.observation
+
+    def get_state(self):
+        return self.make_state(self.observation)
 
     def reset_torcs(self):
        #print("relaunch torcs")
@@ -216,13 +223,15 @@ class TorcsEnv:
         else:
             os.system('torcs -nofuel -nolaptime &')
         time.sleep(0.5)
-        os.system('sh autostart.sh')
+        os.system('sh baselines/ddpg/autostart.sh')
         time.sleep(0.5)
 
     def agent_to_torcs(self, u):
         torcs_action = {'steer': u[0]}
 
         if self.throttle is True:  # throttle action is enabled
+            u[1] = (u[1]+1)/2
+            u[2] = (u[2]+1)/2
             torcs_action.update({'accel': u[1]})
             torcs_action.update({'brake': u[2]})
 
@@ -289,3 +298,6 @@ class TorcsEnv:
                                trackPos=np.array(raw_obs['trackPos'], dtype=np.float32)/1.,
                                wheelSpinVel=np.array(raw_obs['wheelSpinVel'], dtype=np.float32),
                                img=image_rgb)
+
+    def make_state(self, obs):
+        return np.hstack((obs.angle, obs.track, obs.trackPos, obs.speedX, obs.speedY,  obs.speedZ, obs.wheelSpinVel/100.0, obs.rpm))

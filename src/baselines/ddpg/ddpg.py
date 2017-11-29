@@ -198,7 +198,7 @@ class DDPG(object):
         new_std = self.ret_rms.std
         self.old_mean = tf.placeholder(tf.float32, shape=[1], name='old_mean')
         new_mean = self.ret_rms.mean
-        
+
         self.renormalize_Q_outputs_op = []
         for vs in [self.critic.output_vars, self.target_critic.output_vars]:
             assert len(vs) == 2
@@ -213,15 +213,15 @@ class DDPG(object):
     def setup_stats(self):
         ops = []
         names = []
-        
+
         if self.normalize_returns:
             ops += [self.ret_rms.mean, self.ret_rms.std]
             names += ['ret_rms_mean', 'ret_rms_std']
-        
+
         if self.normalize_observations:
             ops += [tf.reduce_mean(self.obs_rms.mean), tf.reduce_mean(self.obs_rms.std)]
             names += ['obs_rms_mean', 'obs_rms_std']
-        
+
         ops += [tf.reduce_mean(self.critic_tf)]
         names += ['reference_Q_mean']
         ops += [reduce_std(self.critic_tf)]
@@ -231,7 +231,7 @@ class DDPG(object):
         names += ['reference_actor_Q_mean']
         ops += [reduce_std(self.critic_with_actor_tf)]
         names += ['reference_actor_Q_std']
-        
+
         ops += [tf.reduce_mean(self.actor_tf)]
         names += ['reference_action_mean']
         ops += [reduce_std(self.actor_tf)]
@@ -347,7 +347,7 @@ class DDPG(object):
     def adapt_param_noise(self):
         if self.param_noise is None:
             return 0.
-        
+
         # Perturb a separate copy of the policy to adjust the scale for the next "real" perturbation.
         batch = self.memory.sample(batch_size=self.batch_size)
         self.sess.run(self.perturb_adaptive_policy_ops, feed_dict={
