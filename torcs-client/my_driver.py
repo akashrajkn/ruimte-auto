@@ -19,7 +19,7 @@ class MyDriver(Driver):
         # bram variables:
         self.standstill_counter = 0
         self.engage_comp0 = 36 # after how many epochs standstill comp 0 engages
-        self.engage_comp_neg1 = 210 # after how many epochs driving but not moving do we realise we are hitting the wall
+        self.engage_comp_neg1 = 250 # after how many epochs driving but not moving do we realise we are hitting the wall
         self.dismiss_comp_neg1 = 600 # after how many epochs driving back are we going to go forward again (may be sooner if we hit enough speed)
 
         self.nn_model = FeedForwardRegression()
@@ -84,27 +84,22 @@ class MyDriver(Driver):
     # bram's implementation
         control_vec = np.full(4, None)
         if self.standstill_counter > self.engage_comp_neg1:
-            control_vec = []
             print("competence level -1 engaged. Back up")
             control_vec[3] = -1 # gear
-            control_vec[0] = .5 # acc
+            control_vec[0] = .3 # acc
             control_vec[1] = 0 # brake
             if carstate.distance_from_center > 0:
-                control_vec[2] = .5 # steer
+                control_vec[2] = .33 # steer
             if carstate.distance_from_center < 0:
-                control_vec[2] = -.5
+                control_vec[2] = -.33
         if self.standstill_counter > self.dismiss_comp_neg1:
-            print("ive backup up long enough, hopefully there is space in front of me now")
-            self.standstill_counter = 4
+            print("ive backed up up long enough, hopefully there is space in front of me now")
+            self.standstill_counter = 0
         return control_vec
 
     def comp_0(self, carstate, command): # move
-    # bram's implementation
+        # bram's implementation
         control_vec = np.full(4, None)
-        if abs(carstate.speed_x) < 5:
-            self.standstill_counter += 1
-        else:
-            self.standstill_counter = 0
         if self.standstill_counter > self.engage_comp0 and self.standstill_counter < self.engage_comp_neg1:
             print("competence level 0 engaged. Move, dammit.")
             control_vec[3] = 1 # gear
@@ -131,6 +126,8 @@ class MyDriver(Driver):
             control_vec[2] = -.5 # steer
         if carstate.angle > 70:
             control_vec[2] = .5 # steer
+        if any(control_vec != None):
+            print("competence level 1 engaged. Trying to face the right way")
         return control_vec
 
     def comp_2(self, carstate, command): # if off-track, steer to the track
@@ -140,17 +137,36 @@ class MyDriver(Driver):
             control_vec[2] = -.2 # steer
         if carstate.distance_from_center < -1:
             control_vec[2] = .2 # steer
+        if any(control_vec != None):
+            print("competence level 2 engaged. override steering in order to stay on track")
         return control_vec
 
     def comp_3_fNN(self, carstate):
         # NN_MODEL
+        print("competence level 3, the neural net, determines the remaining controls")
         control_vec = np.full(4, None)
         x_test = self.convert_carstate_to_array(carstate)
         predicted = self.nn_model(Variable(torch.from_numpy(x_test))).data.numpy()
         #predicted = self.BAD(predicted, t_acc=.1, t_brak=.35, privilege="acc")
         predicted = self.privilege(predicted)
-        control_vec[3] = carstate.gear or 1 # gear
         control_vec[:3] = predicted[0]
+        return control_vec
+
+    def gearbox(self, carstate):
+        control_vec = np.full(4, None)
+        control_vec[3] = carstate.gear or 1
+        if (carstate.rpm > 0 and carstate.gear == 0) or (carstate.rpm < 1000 and carstate.gear == 2):
+            control_vec[3] = 1
+        if carstate.rpm > 1800 and carstate.gear == 1 or (carstate.rpm < 1000 and carstate.gear == 3):
+            control_vec[3] = 2
+        if carstate.rpm > 2500 and carstate.gear == 2 or (carstate.rpm < 1500 and carstate.gear == 4):
+            control_vec[3] = 3
+        if carstate.rpm > 3200 and carstate.gear == 3 or (carstate.rpm < 1800 and carstate.gear == 5):
+            control_vec[3] = 4
+        if carstate.rpm > 4000 and carstate.gear == 4 or (carstate.rpm < 2000 and carstate.gear == 6):
+            control_vec[3] = 5
+        if carstate.rpm > 5000 and carstate.gear == 5:
+            control_vec[3] = 6
         return control_vec
 
     def privilege(self, control):
@@ -180,23 +196,15 @@ class MyDriver(Driver):
 
         command = Command()
 
-        if not command.gear:
-            command.gear = carstate.gear or 1
-
-        # to do: think of a smart way to change gear
-        if carstate.rpm > 2500:
-            command.gear = 1 + carstate.gear
-
+        if abs(carstate.speed_x) < 5:
+            self.standstill_counter += 1
+        else:
+            self.standstill_counter = 0
         # determine which competence level is required here
         # low competence levels have higher priority over
         # high competence levels if their criteria are met
-
-        # TO DO; properly suppres low priority and determine which controls
-        # overwriting command.something gives bad things
         control_vec = self.comp_minus1(carstate, command)
         if any(control_vec == None):
-            print('-----------')
-            print("control_vec", control_vec)
             inferior = self.comp_0(carstate, command)
             control_vec = self.cva_priority(control_vec, inferior)
             if any(control_vec == None):
@@ -208,32 +216,15 @@ class MyDriver(Driver):
                     if any(control_vec == None):
                         inferior = self.comp_3_fNN(carstate)
                         control_vec = self.cva_priority(control_vec, inferior)
+                        if any(control_vec == None):
+                            inferior = self.gearbox(carstate)
+                            control_vec = self.cva_priority(control_vec, inferior)
 
         command.accelerator = control_vec[0]
         command.brake = control_vec[1]
         command.steering = control_vec[2]
         command.gear = control_vec[3]
 
-        # # competence level 2
-        # # if off-track, get back to the track
-        # self.comp_2(carstate, command)
-        #
-        # # competence level 1
-        # # face the right way
-        # self.comp_1(carstate, command)
-        #
-        # # competence level 0
-        # # move
-        # self.comp_0(carstate, command)
-        #
-        # # competence level -1
-        # # back up if we are facing a wall
-        # self.comp_minus1(carstate, command)
-
         print('-----------------')
-        print("gear", carstate.gear)
-        print("speed", carstate.speed_x)
-        print("acc", command.accelerator)
-        print("standstillcounter", self.standstill_counter)
 
         return command
