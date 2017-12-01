@@ -175,15 +175,14 @@ class Client(object):
                 if n_fail < 0:
                     print(u"relaunch torcs")
                     os.system(u'pkill torcs')
-                    time.sleep(1.0)
-                    if self.vision is False:
-                        os.system(u'torcs -nofuel -nodamage -nolaptime &')
-                    else:
-                        os.system(u'torcs -nofuel -nodamage -nolaptime -vision &')
+                    time.sleep(0.5)
+                    os.system(u'torcs -r ~/practice_results_mode.xml -nofuel -nodamage -nolaptime &')
 
-                    time.sleep(1.0)
-                    os.system(u'sh autostart.sh')
+
+                    time.sleep(0.5)
+                    #os.system(u'sh baselines/ddpg/autostart.sh')
                     n_fail = 5
+
                 n_fail -= 1
 
             identify = u'***identified***'

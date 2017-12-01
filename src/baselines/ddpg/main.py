@@ -74,8 +74,6 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, **kwargs):
     training.train(env=env, eval_env=None, param_noise=param_noise,
         action_noise=action_noise, actor=actor, critic=critic, memory=memory, **kwargs)
     env.close()
-    if eval_env is not None:
-        eval_env.close()
     if rank == 0:
         logger.info('total runtime: {}s'.format(time.time() - start_time))
 
