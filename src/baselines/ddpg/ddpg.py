@@ -265,6 +265,20 @@ class DDPG(object):
         action = np.clip(action, self.action_range[0], self.action_range[1])
         return action, q
 
+
+    def act(self, obs, sess):
+
+        actor_tf = self.actor_tf
+        feed_dict = {self.obs0: [obs]}
+
+        action = sess.run(actor_tf, feed_dict=feed_dict)
+
+        action = action.flatten()
+
+        action = np.clip(action, self.action_range[0], self.action_range[1])
+        return action
+
+
     def store_transition(self, obs0, action, reward, obs1, terminal1):
         reward *= self.reward_scale
         self.memory.append(obs0, action, reward, obs1, terminal1)
