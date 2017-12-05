@@ -7,7 +7,7 @@ _logger = logging.getLogger(__name__)
 
 DEGREE_PER_RADIANS = 180 / math.pi
 MPS_PER_KMH = 1000 / 3600
-
+MPS_PER_KMH = 1.
 
 class Value:
     """Base class for value objects."""
