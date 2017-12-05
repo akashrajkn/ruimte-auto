@@ -177,8 +177,8 @@ class Client(object):
                     print(u"relaunch torcs")
                     os.system(u'pkill torcs')
                     time.sleep(0.5)
-                    os.system(u'torcs -r ~/practice_results_mode.xml -nofuel -nodamage -nolaptime &')
-
+                    #os.system(u'torcs -r ~/practice_results_mode.xml -nofuel -nodamage -nolaptime &')
+                    os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/all_tracks.xml -nofuel -nolaptime &')
 
                     time.sleep(0.5)
                     #os.system(u'sh baselines/ddpg/autostart.sh')
