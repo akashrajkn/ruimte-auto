@@ -29,7 +29,7 @@ class TorcsEnv:
         time.sleep(0.5)
 
         #os.system('torcs -r ~/practice_results_mode.xml -nofuel -nolaptime &')
-        os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/all_tracks.xml -nofuel -nolaptime &')
+        os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/aalborg.xml -nofuel -nolaptime &')
         time.sleep(0.5)
         #os.system('sh baselines/ddpg/autostart.sh')
         #time.sleep(0.5)
@@ -220,8 +220,16 @@ class TorcsEnv:
     def reset_torcs(self):
        #print("relaunch torcs")
         os.system('pkill torcs')
-        time.sleep(0.5)
-        os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/all_tracks.xml -nofuel -nolaptime &')
+        #time.sleep(0.5)
+
+        # path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
+        # for filename in os.listdir(path):
+        #     config_file = path + filename
+        #
+        #     print('-----------'+ config_file +'------------')
+        #     os.system('torcs -r ' + config_file + ' -nofuel -nolaptime &')
+        os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/aalborg.xml -nofuel -nolaptime &')
+
         #time.sleep(0.5)
         #os.system('sh baselines/ddpg/autostart.sh')
         #time.sleep(0.5)

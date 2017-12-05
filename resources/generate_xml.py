@@ -18,12 +18,20 @@ def generate_xml():
 
     xml_data = ''
 
+    oval_tracks = ['michigan', 'a-speedway', 'b-speedway', 'c-speedway', 'd-speedway', 'e-speedway', 'e-track-5' 'g-speedway',  'f-speedway']
+    dirt_tracks = ['dirt-1', 'dirt-2', 'dirt-3', 'dirt-4', 'dirt-5', 'dirt-6', 'mixed-1', 'mixed-2']
+
     with open('track.txt', 'r') as f:
         xml_data = f.read()
 
-
     for track in tracks:
-        new_xml = xml_data.format(track)
+        category = 'road'
+        if track in oval_tracks:
+            category = 'oval'
+        elif track in dirt_tracks:
+            category = 'dirt'
+
+        new_xml = xml_data.format(track, category)
 
         with open('xmls/' + track + '.xml', 'w+') as f:
             f.write(new_xml)
@@ -71,5 +79,5 @@ def multiple_tracks():
 
 
 if __name__ == '__main__':
-    # generate_xml()
-    multiple_tracks()
+    generate_xml()
+    # multiple_tracks()

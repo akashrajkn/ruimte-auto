@@ -178,7 +178,17 @@ class Client(object):
                     os.system(u'pkill torcs')
                     time.sleep(0.5)
                     #os.system(u'torcs -r ~/practice_results_mode.xml -nofuel -nodamage -nolaptime &')
-                    os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/all_tracks.xml -nofuel -nolaptime &')
+
+                    #print(os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/example_torcs_config.xml')
+                    os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/aalborg.xml -nofuel -nolaptime &')
+
+                    # path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
+                    # print('snakeoil')
+                    # for filename in os.listdir(path):
+                    #     config_file = path + filename
+                    #
+                    #     print('-----------'+config_file+'------------')
+                    #     os.system('torcs -r ' + config_file + ' -nofuel -nolaptime &')
 
                     time.sleep(0.5)
                     #os.system(u'sh baselines/ddpg/autostart.sh')
