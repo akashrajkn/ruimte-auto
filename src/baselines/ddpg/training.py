@@ -44,6 +44,17 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
     with U.single_threaded_session() as sess:
         # Prepare everything.
         agent.initialize(sess)
+
+        # Restore prev session; added by Dima
+        restore_prev_sess = True
+        if restore_prev_sess:
+            runstats_id = 'runstats-2017-12-01-13-31-44-861522'
+            runstats_path = '../src/baselines/runstats/' + runstats_id + '/model_weights.ckpt'
+            saver_past_sess = tf.train.Saver()
+            saver_past_sess.restore(sess, runstats_path)
+            logger.info('RESTORING SESSION FROM: ' + runstats_path)
+
+
         sess.graph.finalize()
 
         agent.reset()
