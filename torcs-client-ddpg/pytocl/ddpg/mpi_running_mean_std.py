@@ -1,4 +1,4 @@
-from mpi4py import MPI
+#from mpi4py import MPI
 import tensorflow as tf, pytocl.ddpg.tf_util as U, numpy as np
 
 class RunningMeanStd(object):
@@ -39,7 +39,7 @@ class RunningMeanStd(object):
         n = int(np.prod(self.shape))
         totalvec = np.zeros(n*2+1, 'float64')
         addvec = np.concatenate([x.sum(axis=0).ravel(), np.square(x).sum(axis=0).ravel(), np.array([len(x)],dtype='float64')])
-        MPI.COMM_WORLD.Allreduce(addvec, totalvec, op=MPI.SUM)
+        #MPI.COMM_WORLD.Allreduce(addvec, totalvec, op=MPI.SUM)
         self.incfiltparams(totalvec[0:n].reshape(self.shape), totalvec[n:2*n].reshape(self.shape), totalvec[2*n])
 
 @U.in_session
@@ -70,7 +70,7 @@ def test_dist():
     # p1,p2,p3=(np.random.randn(3), np.random.randn(4), np.random.randn(5))
     # q1,q2,q3=(np.random.randn(6), np.random.randn(7), np.random.randn(8))
 
-    comm = MPI.COMM_WORLD
+    #comm = MPI.COMM_WORLD
     assert comm.Get_size()==2
     if comm.Get_rank()==0:
         x1,x2,x3 = p1,p2,p3

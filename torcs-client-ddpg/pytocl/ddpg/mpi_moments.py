@@ -1,4 +1,4 @@
-from mpi4py import MPI
+#from mpi4py import MPI
 import numpy as np
 #from baselines.common import zipsame
 
@@ -8,10 +8,10 @@ def mpi_moments(x, axis=0):
     newshape.pop(axis)
     n = np.prod(newshape,dtype=int)
     totalvec = np.zeros(n*2+1, 'float64')
-    addvec = np.concatenate([x.sum(axis=axis).ravel(), 
-        np.square(x).sum(axis=axis).ravel(), 
+    addvec = np.concatenate([x.sum(axis=axis).ravel(),
+        np.square(x).sum(axis=axis).ravel(),
         np.array([x.shape[axis]],dtype='float64')])
-    MPI.COMM_WORLD.Allreduce(addvec, totalvec, op=MPI.SUM)
+    #MPI.COMM_WORLD.Allreduce(addvec, totalvec, op=MPI.SUM)
     sum = totalvec[:n]
     sumsq = totalvec[n:2*n]
     count = totalvec[2*n]
@@ -25,7 +25,7 @@ def mpi_moments(x, axis=0):
 
 
 def test_runningmeanstd():
-    comm = MPI.COMM_WORLD
+    #comm = MPI.COMM_WORLD
     np.random.seed(0)
     for (triple,axis) in [
         ((np.random.randn(3), np.random.randn(4), np.random.randn(5)),0),

@@ -1,4 +1,4 @@
-from mpi4py import MPI
+#from mpi4py import MPI
 import pytocl.ddpg.tf_util as U
 import tensorflow as tf
 import numpy as np
@@ -16,14 +16,14 @@ class MpiAdam(object):
         self.t = 0
         self.setfromflat = U.SetFromFlat(var_list)
         self.getflat = U.GetFlat(var_list)
-        self.comm = MPI.COMM_WORLD if comm is None else comm
+        #self.comm = MPI.COMM_WORLD if comm is None else comm
 
     def update(self, localg, stepsize):
         if self.t % 100 == 0:
             self.check_synced()
         localg = localg.astype('float32')
         globalg = np.zeros_like(localg)
-        self.comm.Allreduce(localg, globalg, op=MPI.SUM)
+        #self.comm.Allreduce(localg, globalg, op=MPI.SUM)
         if self.scale_grad_by_procs:
             globalg /= self.comm.Get_size()
 
@@ -53,7 +53,7 @@ class MpiAdam(object):
 def test_MpiAdam():
     np.random.seed(0)
     tf.set_random_seed(0)
-    
+
     a = tf.Variable(np.random.randn(3).astype('float32'))
     b = tf.Variable(np.random.randn(2,5).astype('float32'))
     loss = tf.reduce_sum(tf.square(a)) + tf.reduce_sum(tf.sin(b))

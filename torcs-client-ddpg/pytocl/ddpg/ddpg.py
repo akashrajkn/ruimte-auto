@@ -268,13 +268,9 @@ class DDPG(object):
 
     def act(self, obs, sess):
 
-        actor_tf = self.actor_tf
         feed_dict = {self.obs0: [obs]}
-
-        action = sess.run(actor_tf, feed_dict=feed_dict)
-
+        action = sess.run(self.actor_tf, feed_dict=feed_dict)
         action = action.flatten()
-
         action = np.clip(action, self.action_range[0], self.action_range[1])
         return action
 

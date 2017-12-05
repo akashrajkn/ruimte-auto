@@ -6,7 +6,7 @@ import json
 import time
 import datetime
 import tempfile
-from mpi4py import MPI
+#from mpi4py import MPI
 
 LOG_OUTPUT_FORMATS = ['stdout', 'log', 'csv']
 # Also valid: json, tensorboard
@@ -171,7 +171,8 @@ class TensorBoardOutputFormat(KVWriter):
 
 def make_output_format(format, ev_dir):
     os.makedirs(ev_dir, exist_ok=True)
-    rank = MPI.COMM_WORLD.Get_rank()
+    rank = 0
+    #rank = MPI.COMM_WORLD.Get_rank()
     if format == 'stdout':
         return HumanOutputFormat(sys.stdout)
     elif format == 'log':
