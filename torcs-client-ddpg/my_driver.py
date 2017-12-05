@@ -35,8 +35,9 @@ class MyDriver(Driver):
         saver = tf.train.Saver()
         self.sess = tf.Session()
         # Restore variables from disk.
-        saver.restore(self.sess, "/media/dima/Data/ProjectsD/computational-i-uva/ruimte-auto/src/baselines/runstats/openai-2017-12-01-13-31-44-861522/model_weights.ckpt")
-
+        runstats_id = 'runstats-2017-12-01-13-31-44-861522'
+        runstats_path = '../src/baselines/runstats/' + runstats_id + '/model_weights.ckpt'
+        saver.restore(self.sess, runstats_path)
 
     def BAD(self, control, acc = .5, brake = .5, privilege = "brak"):
         '''
@@ -103,7 +104,7 @@ class MyDriver(Driver):
         # All actions are predicted in [-1, 1]; normalizing back:
         command[1] = (command[1]+1)/2
         command[2] = (command[2]+1)/2
-        command[2] = 0
+        #command[2] = 0
         command = [command]
         return command
 
