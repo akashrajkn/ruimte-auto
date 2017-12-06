@@ -298,7 +298,7 @@ class MyDriver(Driver):
         '''
         Custom Drive Function
         '''
-        self.swarm_communication()
+        self.swarm_communication(carstate)
 
         command = Command()
 
