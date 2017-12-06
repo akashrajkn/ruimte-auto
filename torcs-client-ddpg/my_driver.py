@@ -48,6 +48,19 @@ class MyDriver(Driver):
         runstats_path = '../src/baselines/runstats/' + runstats_id + '/model_weights.ckpt'
         saver.restore(self.sess, runstats_path)
 
+        # For Swarm intelligence
+        communication_file = '/tmp/BAD'
+
+        self.bully = False
+
+        for i in range(1, 10):
+            try:
+                self.car_number = i
+                os.mkfifo(communication_file + str(i))
+                break
+            except OSError as e:
+                print("OS Error: ", e)
+
     def BAD(self, control, acc = .5, brake = .5, privilege = "brak"):
         '''
         Bram Akash Dmitrii
@@ -302,3 +315,28 @@ class MyDriver(Driver):
         #     command.gear=6
 
         return command
+
+    def is_friend(self, carstate, friend_carstate):
+        '''
+        Find if the car is not opponent
+        '''
+        # TODO: this function is not complete
+
+        if abs(carstate.racePos - friend_carstate.racePos) == 1:
+            return True
+
+    def is_bully(self, carstate, friend_carstate):
+        '''
+        For swarm intelligence, check if the current car is bully or champion
+        '''
+        if friend_carstate is None:
+            return False
+
+        # If the car is in the end, it is a champion
+        if carstate.racePos > 8:
+            return False
+
+        # If distance between cars is more than 60m, set the car as champion
+        distance_between_cars = friend_carstate.distFromStart - carstate.distFromStart
+        if (distance_between_cars > 60) or (distance_between_cars < -60):
+            return False
