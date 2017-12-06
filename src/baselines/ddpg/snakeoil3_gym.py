@@ -60,6 +60,8 @@ import sys
 import getopt
 import os
 import time
+from random import randint
+
 PI= 3.14159265359
 
 data_size = 2**17
@@ -141,6 +143,7 @@ class Client(object):
         self.S= ServerState()
         self.R= DriverAction()
         self.setup_connection()
+        self.ison = True
 
     def setup_connection(self):
         # == Set Up UDP Socket ==
@@ -152,7 +155,7 @@ class Client(object):
         # == Initialize Connection To Server ==
         self.so.settimeout(1)
 
-        n_fail = 5
+        n_fail = 3
         while True:
             # This string establishes track sensor angles! You can customize them.
             #a= "-90 -75 -60 -45 -30 -20 -15 -10 -5 0 5 10 15 20 30 45 60 75 90"
@@ -177,10 +180,14 @@ class Client(object):
                     print(u"relaunch torcs")
                     os.system(u'pkill torcs')
                     time.sleep(0.5)
-                    #os.system(u'torcs -r ~/practice_results_mode.xml -nofuel -nodamage -nolaptime &')
 
                     #print(os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/example_torcs_config.xml')
-                    os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/aalborg.xml -nofuel -nolaptime &')
+                    xml_path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
+                    track_id = (randint(0, len(os.listdir(xml_path))-1))
+                    track_xml = os.listdir(xml_path)[track_id]
+                    os.system('torcs -r ' + xml_path + track_xml + ' -nofuel -nolaptime &')
+                    #os.system('torcs -r ~/practice_results_mode.xml -nofuel -nolaptime &')
+                    time.sleep(0.5)
 
                     # path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
                     # print('snakeoil')
@@ -190,7 +197,7 @@ class Client(object):
                     #     print('-----------'+config_file+'------------')
                     #     os.system('torcs -r ' + config_file + ' -nofuel -nolaptime &')
 
-                    time.sleep(0.5)
+                    #time.sleep(0.5)
                     #os.system(u'sh baselines/ddpg/autostart.sh')
                     n_fail = 5
 
@@ -297,7 +304,24 @@ class Client(object):
                % (self.maxSteps,self.port))
         self.so.close()
         self.so = None
+        self.ison = False
         #sys.exit() # No need for this really.
+
+    def reset_torcs(self):
+       #print("relaunch torcs")
+        os.system('pkill torcs')
+        #time.sleep(0.5)
+
+        # path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
+        # for filename in os.listdir(path):
+        #     config_file = path + filename
+        #
+        #     print('-----------'+ config_file +'------------')
+        #     os.system('torcs -r ' + config_file + ' -nofuel -nolaptime &')
+        xml_path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
+        track_id = (randint(0, len(os.listdir(xml_path))))
+        track_xml = os.listdir(xml_path)[track_id]
+        os.system('torcs -r ' + xml_path + track_xml + ' -nofuel -nolaptime &')
 
 class ServerState(object):
     u'''What the server is reporting right now.'''
@@ -575,6 +599,10 @@ def drive_example(c):
     if S[u'speedX']>170:
         R[u'gear']=6
     return
+
+
+
+
 
 # ================ MAIN ================
 if __name__ == u"__main__":

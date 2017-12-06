@@ -8,6 +8,7 @@ import copy
 import collections as col
 import os
 import time
+from random import randint
 
 
 class TorcsEnv:
@@ -28,8 +29,11 @@ class TorcsEnv:
         os.system('pkill torcs')
         time.sleep(0.5)
 
+        xml_path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
+        track_id = (randint(0, len(os.listdir(xml_path))-1))
+        track_xml = os.listdir(xml_path)[track_id]
+        os.system('torcs -r ' + xml_path + track_xml + ' -nofuel -nolaptime &')
         #os.system('torcs -r ~/practice_results_mode.xml -nofuel -nolaptime &')
-        os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/aalborg.xml -nofuel -nolaptime &')
         time.sleep(0.5)
         #os.system('sh baselines/ddpg/autostart.sh')
         #time.sleep(0.5)
@@ -60,7 +64,18 @@ class TorcsEnv:
     def step(self, u):
        #print("Step")
         # convert thisAction to the actual torcs actionstr
+
+
+
+
         client = self.client
+
+        # Check if client is off
+        if self.client.ison is False:
+            print('RESETTING TORCS')
+            self.reset()
+            self.client.ison = True
+
         this_action = self.agent_to_torcs(u)
 
         # Apply Action
@@ -228,7 +243,11 @@ class TorcsEnv:
         #
         #     print('-----------'+ config_file +'------------')
         #     os.system('torcs -r ' + config_file + ' -nofuel -nolaptime &')
-        os.system('torcs -r ' + os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/aalborg.xml -nofuel -nolaptime &')
+        xml_path = os.path.dirname(os.path.abspath(__file__)) + '/../../../resources/xmls/'
+        track_id = (randint(0, len(os.listdir(xml_path))-1))
+        track_xml = os.listdir(xml_path)[track_id]
+        os.system('torcs -r ' + xml_path + track_xml + ' -nofuel -nolaptime &')
+        #os.system('torcs -r ~/practice_results_mode.xml -nofuel -nolaptime &')
 
         #time.sleep(0.5)
         #os.system('sh baselines/ddpg/autostart.sh')
