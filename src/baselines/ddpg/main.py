@@ -58,7 +58,7 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, **kwargs):
             raise RuntimeError('unknown noise type "{}"'.format(current_noise_type))
 
     # Configure components.
-    memory = Memory(limit=int(1e6), action_shape=(3,), observation_shape=(29,))
+    memory = Memory(limit=int(1e6), action_shape=(3,), observation_shape=(65,))
     critic = Critic(layer_norm=layer_norm)
     actor = Actor(nb_actions, layer_norm=layer_norm)
 

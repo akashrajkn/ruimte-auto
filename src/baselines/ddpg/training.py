@@ -22,7 +22,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
     #assert (np.abs(env.action_space.low) == env.action_space.high).all()  # we assume symmetric actions.
     max_action = env.action_space.high
     logger.info('scaling actions by {} before executing in env'.format(max_action))
-    agent = DDPG(actor, critic, memory, (29,),  (3,),
+    agent = DDPG(actor, critic, memory, (65,),  (3,),
         gamma=gamma, tau=tau, normalize_returns=normalize_returns, normalize_observations=normalize_observations,
         batch_size=batch_size, action_noise=action_noise, param_noise=param_noise, critic_l2_reg=critic_l2_reg,
         actor_lr=actor_lr, critic_lr=critic_lr, enable_popart=popart, clip_norm=clip_norm,
@@ -46,9 +46,11 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
         agent.initialize(sess)
 
         # Restore prev session; added by Dima
-        restore_prev_sess = True
+        restore_prev_sess = False
         if restore_prev_sess:
-            runstats_id = 'runstats-2017-12-01-13-31-44-861522'
+            #runstats_id = 'runstats-2017-12-01-13-31-44-861522'
+            #runstats_id = 'first_10_min_of_bully_training_from_scratch'
+            runstats_id = 'runstats-2017-12-06-11-01-58-460076'
             runstats_path = '../src/baselines/runstats/' + runstats_id + '/model_weights.ckpt'
             saver_past_sess = tf.train.Saver()
             saver_past_sess.restore(sess, runstats_path)
@@ -182,6 +184,6 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 if hasattr(env, 'get_state'):
                     with open(os.path.join(logdir, 'env_state.pkl'), 'wb') as f:
                         pickle.dump(env.get_state(), f)
-                if epoch%10==0:
+                if epoch%1==0:
                     saver.save(sess, os.path.join(logdir, 'model_weights.ckpt'))
                     print('Session variables saved.')

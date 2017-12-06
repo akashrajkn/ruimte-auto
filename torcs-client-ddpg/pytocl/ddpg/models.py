@@ -18,7 +18,6 @@ class Model(object):
     def perturbable_vars(self):
         return [var for var in self.trainable_vars if 'LayerNorm' not in var.name]
 
-
 class Actor(Model):
     def __init__(self, nb_actions, name='actor', layer_norm=True):
         super(Actor, self).__init__(name=name)

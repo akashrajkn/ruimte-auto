@@ -12,16 +12,20 @@ from pytocl.ddpg.models import Actor, Critic
 from pytocl.ddpg.memory import Memory
 from pytocl.ddpg.ddpg import DDPG
 
-
 class MyDriver(Driver):
     def __init__(self):
         realpath = os.path.dirname(os.path.realpath(__file__))
 
         self.control = np.zeros(3)
+        self.car_number = None
+        self.friend = None
+        self.steps = 0
 
         # bram variables for rule-based low competence levels:
+        self.bully = False
         self.speed_is_standstill = 13 # under which speed we consider ourselfs to be 'standing still'
         self.standstill_counter = 0
+        self.angle_limit = 26
         self.engage_comp0 = 36 # after how many epochs standstill comp 0 engages
         self.engage_comp_neg1 = 180 # after how many epochs driving but not moving do we realise we are hitting the wall
         self.dismiss_comp_neg1 = 580 # after how many epochs driving back are we going to go forward again (may be sooner if we hit enough speed)
@@ -33,7 +37,8 @@ class MyDriver(Driver):
         memory = Memory(limit=int(1e6), action_shape=(3,), observation_shape=(29,))
         critic = Critic(layer_norm=True)
         actor = Actor(nb_actions, layer_norm=True)
-        self.agent = DDPG(actor, critic, memory, (29,),  (3,),
+
+        self.champion_agent = DDPG(actor, critic, memory, (29,),  (3,),
                     gamma=0.99, tau=0.01, normalize_returns=False,
                     normalize_observations=True,
                     batch_size=64, action_noise=action_noise, param_noise=param_noise,
@@ -42,42 +47,11 @@ class MyDriver(Driver):
 
         saver = tf.train.Saver()
         self.sess = tf.Session()
+
         # Restore variables from disk.
-        runstats_id = 'runstats-2017-12-01-13-31-44-861522' # Dima's first thing from 1dec
-        #runstats_id = 'first_10_min_of_bully_training_from_scratch'
-        #runstats_id = 'first_7hrs_of_bully_training'
-        runstats_path = '../src/baselines/runstats/' + runstats_id + '/model_weights.ckpt'
-        saver.restore(self.sess, runstats_path)
-
-        # For Swarm intelligence
-        self.communication_file = 'BAD.json'
-        self.bully = False
-        self.car_number = None
-        self.friend = None
-        self.steps = 0
-
-    def BAD(self, control, acc = .5, brake = .5, privilege = "brak"):
-        '''
-        Bram Akash Dmitrii
-        threshold acceleration and braking
-        acceleration/braking privilege if both are 1
-        '''
-        if control[0][0] > acc:
-            control[0][0] = 1
-        else:
-            control[0][0] = 0
-
-        if control[0][1] > brake:
-            control[0][1] = 1
-        else:
-            control[0][1] = 0
-
-        if privilege == "brak" and control[0][1] == 1:
-            control[0][0] = 0
-        if privilege == "acc" and control[0][0] == 1:
-            control[0][1] = 0
-
-        return control
+        runstats_id_champ = 'Dimas_champion_trained_11hrs'
+        runstats_path_champ = '../src/baselines/runstats/' + runstats_id_champ + '/model_weights.ckpt'
+        saver.restore(self.sess, runstats_path_champ)
 
     def convert_carstate_to_array(self, carstate, proc='nn'):
         '''
@@ -117,13 +91,38 @@ class MyDriver(Driver):
 
     def ddpg_driver(self, carstate):
         obs = self.convert_carstate_to_array(carstate, proc='ddpg')
-        command = self.agent.act(obs, self.sess)
+        command = self.champion_agent.act(obs, self.sess)
         # All actions are predicted in [-1, 1]; normalizing back:
         command[1] = (command[1]+1)/2
         command[2] = (command[2]+1)/2
         #command[2] = 0
         command = [command]
         return command
+
+    def repel(self, carstate):
+        pass
+
+    def attract(self, carstate):
+        pass
+
+    def is_bully(self, carstate, friend_carstate):
+        '''
+        For swarm intelligence, check if the current car is bully or champion
+        '''
+        if friend_carstate is None:
+            self.bully = False
+
+        # If the car is in the end, it is a champion
+        if carstate.sensor_dict['racePos'] > 7:
+            self.bully = False
+
+        # If distance between cars is more than 60m, set the car as bully
+        distance_between_cars = friend_carstate.distance_from_start - carstate.distFromStart
+        if distance_between_cars > 60:
+            self.bully = True
+
+        if distance_between_cars < -60:
+            self.bully = False
 
     def comp_minus1(self, carstate, show): # back up
     # bram's implementation
@@ -160,7 +159,7 @@ class MyDriver(Driver):
     def comp_1(self, carstate, show): # face the right way, don't drive backwards
     # bram's implementation
         control_vec = np.full(4, None)
-        if carstate.angle < -45 or carstate.angle > 45:
+        if abs(carstate.angle)> self.angle_limit:
             if carstate.speed_x > 0 and carstate.speed_x < 30:
                 control_vec[3] = 1 # gear
                 control_vec[0] = .04 # acc
@@ -169,12 +168,11 @@ class MyDriver(Driver):
                 control_vec[3] = 1
                 control_vec[0] = 0 # acc
                 control_vec[1] = .5 # brak
-        print("angle:",carstate.angle)
-        if carstate.angle < -70:
+        if carstate.angle < -self.angle_limit:
             control_vec[2] = -.34 # steer
             if show:
                 print("adjust steering")
-        if carstate.angle > 70:
+        if carstate.angle > self.angle_limit:
             control_vec[2] = .34 # steer
             if show:
                 print("adjust steering")
@@ -205,36 +203,61 @@ class MyDriver(Driver):
     def comp_4_ddpg(self, carstate, show):
         # DDPG_model
         control_vec = np.full(4, None)
-
         predicted = self.ddpg_driver(carstate)
 
         # Order of controls for DDPG (note: different than for FNN and ESN):
         control_vec[2] = predicted[0][0] # steering
         control_vec[0] = predicted[0][1] # accelerator
         control_vec[1] = predicted[0][2] # brake
-
-        if show and any(control_vec != None):
-            print("competence level 4 engaged. DDPG has the steering wheel")
-
         return control_vec
+
+    def rule_based_bully(self, carstate, control_vec, show):
+        # if carstate.opponents[0] < 20 or carstate.opponents[35] < 20:
+        #     control_vec[0] *= .8
+        #     if show:
+        #         print("they're behind me, I'll slow down")
+        # if any(carstate.opponents[1:4] < 20:
+        #     control_vec[2]
+
+
+        if show:
+            print("I am the bully")
+        return control_vec
+
 
     def gearbox(self, carstate):
         control_vec = np.full(4, None)
         control_vec[3] = carstate.gear or 1
-        if (carstate.rpm > 0 and carstate.gear == 0) or (carstate.rpm < 1000 and carstate.gear == 2):
+        if (carstate.rpm > 0 and carstate.gear == 0) or (carstate.rpm < 2000 and carstate.gear == 2):
             control_vec[3] = 1
-        if carstate.rpm > 1800 and carstate.gear == 1 or (carstate.rpm < 1000 and carstate.gear == 3):
+        if carstate.rpm > 3200 and carstate.gear == 1 or (carstate.rpm < 3000 and carstate.gear == 3):
             control_vec[3] = 2
-        if carstate.rpm > 2500 and carstate.gear == 2 or (carstate.rpm < 1500 and carstate.gear == 4):
+        if carstate.rpm > 5000 and carstate.gear == 2 or (carstate.rpm < 4000 and carstate.gear == 4):
             control_vec[3] = 3
-        if carstate.rpm > 3200 and carstate.gear == 3 or (carstate.rpm < 1800 and carstate.gear == 5):
+        if carstate.rpm > 6000 and carstate.gear == 3 or (carstate.rpm < 5000 and carstate.gear == 5):
             control_vec[3] = 4
-        if carstate.rpm > 4000 and carstate.gear == 4 or (carstate.rpm < 2000 and carstate.gear == 6):
+        if carstate.rpm > 7000 and carstate.gear == 4 or (carstate.rpm < 6000 and carstate.gear == 6):
             control_vec[3] = 5
-        if carstate.rpm > 5000 and carstate.gear == 5:
+        if carstate.rpm > 8000 and carstate.gear == 5:
             control_vec[3] = 6
         if carstate.speed_x < -10:
             control_vec[3] = 0
+
+        # # Automatic Transmission like in snakeoil
+        # control_vec[3] = 1
+        # if carstate.speed_x > 50:
+        #     control_vec[3] = 2
+        # if carstate.speed_x > 80:
+        #     control_vec[3] = 3
+        # if carstate.speed_x > 110:
+        #     control_vec[3] = 4
+        # if carstate.speed_x > 140:
+        #     control_vec[3] = 5
+        # if carstate.speed_x > 170:
+        #     control_vec[3] = 6
+        # if carstate.speed_x < -10:
+        #     control_vec[3] = 0
+
         return control_vec
 
     def privilege(self, control):
@@ -306,6 +329,17 @@ class MyDriver(Driver):
             self.standstill_counter += 1
         else:
             self.standstill_counter = 0
+
+        # Read friend carstate
+        if self.car_number and self.friend:
+            if self.car_number > self.friend:
+                filepath = 'BAD2.json'
+            else:
+                filepath = 'BAD1.json'
+            with open(filepath, 'r') as f:
+                friend_carstate = json.load(f)
+            self.is_bully(carstate, friend_carstate)
+
         # determine which competence level is required here
         # low competence levels have higher priority over
         # high competence levels if their criteria are met
@@ -326,54 +360,17 @@ class MyDriver(Driver):
                         if any(control_vec == None):
                             inferior = self.comp_4_ddpg(carstate, show)
                             control_vec = self.cva_priority(control_vec, inferior)
-                            if any(control_vec == None):
-                                inferior = self.gearbox(carstate)
-                                control_vec = self.cva_priority(control_vec, inferior)
+                            if self.bully:
+                                control_vec = self.rule_based_bully(carstate, control_vec, show)
+                                if any(control_vec == None):
+                                    inferior = self.gearbox(carstate)
+                                    control_vec = self.cva_priority(control_vec, inferior)
 
-        control_vec = self.privilege(control_vec)
-        print(control_vec)
+        #control_vec = self.privilege(control_vec)
 
         command.accelerator = control_vec[0]
         command.brake = control_vec[1]
         command.steering = control_vec[2]
         command.gear = control_vec[3]
 
-        # # Automatic Transmission like in snakeoil
-        # command.gear=1
-        # if carstate.speed_x>50:
-        #     command.gear=2
-        # if carstate.speed_x>80:
-        #     command.gear=3
-        # if carstate.speed_x>110:
-        #     command.gear=4
-        # if carstate.speed_x>140:
-        #     command.gear=5
-        # if carstate.speed_x>170:
-        #     command.gear=6
-
         return command
-
-    def repel(self, carstate):
-        pass
-
-    def attract(self, carstate):
-        pass
-
-    def is_bully(self, carstate, friend_carstate):
-        '''
-        For swarm intelligence, check if the current car is bully or champion
-        '''
-        if friend_carstate is None:
-            self.bully = False
-
-        # If the car is in the end, it is a champion
-        if carstate.sensor_dict['racePos'] > 7:
-            self.bully = False
-
-        # If distance between cars is more than 60m, set the car as champion
-        distance_between_cars = friend_carstate.distFromStart - carstate.distFromStart
-        if distance_between_cars > 60:
-            self.bully = True
-
-        if distance_between_cars < -60:
-            self.bully = False
