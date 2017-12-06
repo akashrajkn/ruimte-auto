@@ -216,16 +216,31 @@ class MyDriver(Driver):
         return control_vec
 
     def rule_based_bully(self, carstate, control_vec, show):
-        # if carstate.opponents[0] < 20 or carstate.opponents[35] < 20:
-        #     control_vec[0] *= .8
-        #     if show:
-        #         print("they're behind me, I'll slow down")
-        # if any(carstate.opponents[1:4] < 20:
-        #     control_vec[2]
+        if carstate.opponents[0] < 20 or carstate.opponents[35] < 20:
+            control_vec[0] *= .8
+            if show:
+                print("they're behind me, I'll slow down")
 
+        if any(carstate.opponents[1:4] < 12):
+            control_vec[0] *= .9
+            control_vec[2] -= .05
+        if any(carstate.opponents[30:34] < 12):
+            control_vec[0] *= .9
+            control_vec[2] += .05
+
+        if any(carstate.opponents[5:10] < 4):
+            if carstate.opponents[10] < 3:
+                control_vec[0] = 1
+            control_vec[2] -= .12
+
+        if any(carstate.opponents[24:29] < 4):
+            if carstate.opponents[24] < 3:
+                control_vec[0] = 1
+            control_vec[2] += .12
 
         if show:
             print("I am the bully")
+
         return control_vec
 
 
@@ -322,10 +337,11 @@ class MyDriver(Driver):
                     json.dump(information, f)
 
     def drive(self, carstate: State) -> Command:
-        '''
-        Custom Drive Function
-        '''
-        self.swarm_communication(carstate)
+        #'''
+        #Custom Drive Function
+        #'''
+
+        #self.swarm_communication(carstate)
 
         command = Command()
 
@@ -371,9 +387,9 @@ class MyDriver(Driver):
                             control_vec = self.cva_priority(control_vec, inferior)
                             if self.bully:
                                 control_vec = self.rule_based_bully(carstate, control_vec, show)
-                                if any(control_vec == None):
-                                    inferior = self.gearbox(carstate)
-                                    control_vec = self.cva_priority(control_vec, inferior)
+                            if any(control_vec == None):
+                                inferior = self.gearbox(carstate)
+                                control_vec = self.cva_priority(control_vec, inferior)
 
         #control_vec = self.privilege(control_vec)
 
