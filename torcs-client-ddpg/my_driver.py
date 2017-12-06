@@ -1,10 +1,11 @@
 import os
 import sys
 import pickle
+import json
 import numpy as np
 import collections as col
 from pytocl.driver import Driver
-from pytocl.car import State, Command
+from pytocl.car import State, Command, DEGREE_PER_RADIANS, MPS_PER_KMH
 
 import tensorflow as tf
 from pytocl.ddpg.models import Actor, Critic
@@ -49,17 +50,32 @@ class MyDriver(Driver):
         saver.restore(self.sess, runstats_path)
 
         # For Swarm intelligence
-        communication_file = '/tmp/BAD'
-
+        self.communication_file = 'BAD.json'
         self.bully = False
 
-        for i in range(1, 10):
-            try:
-                self.car_number = i
-                os.mkfifo(communication_file + str(i))
-                break
-            except OSError as e:
-                print("OS Error: ", e)
+        # Read communication_file
+        with open(self.communication_file, 'r') as f:
+            self.data = json.load(f)
+        f.close()
+
+        if len(self.data.keys()) == 0:
+            self.car_number = '1'
+            self.data['1'] = {}
+        else:
+            self.car_number = '2'
+            self.data['2'] = {}
+
+        # Write to file
+        with open(self.communication_file, 'w') as f:
+            json.dump(self.data, f)
+        f.close()
+        # for i in range(1, 10):
+        #     try:
+        #         self.car_number = i
+        #         os.mkfifo(communication_file + str(i))
+        #         break
+        #     except OSError as e:
+        #         print("OS Error: ", e)
 
     def BAD(self, control, acc = .5, brake = .5, privilege = "brak"):
         '''
@@ -263,6 +279,20 @@ class MyDriver(Driver):
         '''
         Custom Drive Function
         '''
+        with open(self.communication_file, 'r') as f:
+            self.data = json.load(f)
+        f.close()
+
+        self.data[self.car_number] = 'hello'
+
+        with open(self.communication_file, 'w') as f:
+            json.dump(self.data, f)
+        f.close()
+
+        print("---- data, " + self.car_number + "------")
+        print(self.data)
+        print("-------------------------")
+
         command = Command()
 
         if abs(carstate.speed_x) < self.speed_is_standstill:
@@ -316,6 +346,7 @@ class MyDriver(Driver):
 
         return command
 
+
     def is_friend(self, carstate, friend_carstate):
         '''
         Find if the car is not opponent
@@ -338,5 +369,8 @@ class MyDriver(Driver):
 
         # If distance between cars is more than 60m, set the car as champion
         distance_between_cars = friend_carstate.distFromStart - carstate.distFromStart
-        if (distance_between_cars > 60) or (distance_between_cars < -60):
-            return False
+        if distance_between_cars > 60:
+            self.bully = True
+
+        if distance_between_cars < -60:
+            self.bully = False
