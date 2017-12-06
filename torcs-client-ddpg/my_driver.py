@@ -19,11 +19,11 @@ class MyDriver(Driver):
         self.control = np.zeros(3)
 
         # bram variables for rule-based low competence levels:
-        self.speed_is_standstill = 11 # under which speed we consider ourselfs to be 'standing still'
+        self.speed_is_standstill = 13 # under which speed we consider ourselfs to be 'standing still'
         self.standstill_counter = 0
         self.engage_comp0 = 36 # after how many epochs standstill comp 0 engages
-        self.engage_comp_neg1 = 150 # after how many epochs driving but not moving do we realise we are hitting the wall
-        self.dismiss_comp_neg1 = 400 # after how many epochs driving back are we going to go forward again (may be sooner if we hit enough speed)
+        self.engage_comp_neg1 = 180 # after how many epochs driving but not moving do we realise we are hitting the wall
+        self.dismiss_comp_neg1 = 580 # after how many epochs driving back are we going to go forward again (may be sooner if we hit enough speed)
 
         # DDPG
         nb_actions = 3
@@ -42,7 +42,9 @@ class MyDriver(Driver):
         saver = tf.train.Saver()
         self.sess = tf.Session()
         # Restore variables from disk.
-        runstats_id = 'runstats-2017-12-01-13-31-44-861522'
+        runstats_id = 'runstats-2017-12-01-13-31-44-861522' # Dima's first thing from 1dec
+        #runstats_id = 'first_10_min_of_bully_training_from_scratch'
+        #runstats_id = 'first_7hrs_of_bully_training'
         runstats_path = '../src/baselines/runstats/' + runstats_id + '/model_weights.ckpt'
         saver.restore(self.sess, runstats_path)
 
@@ -115,11 +117,12 @@ class MyDriver(Driver):
         command = [command]
         return command
 
-    def comp_minus1(self, carstate, command): # back up
+    def comp_minus1(self, carstate, show): # back up
     # bram's implementation
         control_vec = np.full(4, None)
         if self.standstill_counter > self.engage_comp_neg1:
-            print("competence level -1 engaged. Back up")
+            if show:
+                print("competence level -1 engaged. Back up")
             control_vec[3] = -1 # gear
             control_vec[0] = .16 # acc
             control_vec[1] = 0 # brake
@@ -127,52 +130,71 @@ class MyDriver(Driver):
                 control_vec[2] = .43 # steer
             if carstate.distance_from_center < 0:
                 control_vec[2] = -.43
+            #if abs(carstate.angle) > 110:
+                #control_vec[2] = -control_vec[2]
         if self.standstill_counter > self.dismiss_comp_neg1:
-            print("ive backed up up long enough, hopefully there is space in front of me now")
+            if show:
+                print("ive backed up up long enough, hopefully there is space in front of me now")
             self.standstill_counter = 0
         return control_vec
 
-    def comp_0(self, carstate, command): # move
+    def comp_0(self, carstate, show): # move
         # bram's implementation
         control_vec = np.full(4, None)
         if self.standstill_counter > self.engage_comp0 and self.standstill_counter < self.engage_comp_neg1:
-            print("competence level 0 engaged. Move, dammit.")
+            if show:
+                print("competence level 0 engaged. Move, dammit.")
             control_vec[3] = 1 # gear
             control_vec[0] = .5 # acc
             control_vec[1] = 0 # brak
         return control_vec
 
-    def comp_1(self, carstate, command): # face the right way, don't drive backwards
+    def comp_1(self, carstate, show): # face the right way, don't drive backwards
     # bram's implementation
         control_vec = np.full(4, None)
-        if carstate.angle < -70 and carstate.angle > 70:
-            if carstate.speed_x < 30:
+        if carstate.angle < -45 or carstate.angle > 45:
+            if carstate.speed_x > 0 and carstate.speed_x < 30:
                 control_vec[3] = 1 # gear
-                control_vec[0] = .2 # acc
+                control_vec[0] = .04 # acc
                 control_vec[1] = 0 # brak
             else:
+                control_vec[3] = 1
                 control_vec[0] = 0 # acc
                 control_vec[1] = .5 # brak
+        print("angle:",carstate.angle)
         if carstate.angle < -70:
-            control_vec[2] = -.5 # steer
+            control_vec[2] = -.34 # steer
+            if show:
+                print("adjust steering")
         if carstate.angle > 70:
-            control_vec[2] = .5 # steer
-        if any(control_vec != None):
+            control_vec[2] = .34 # steer
+            if show:
+                print("adjust steering")
+        if show and any(control_vec != None):
             print("competence level 1 engaged. Trying to face the right way")
         return control_vec
 
-    def comp_2(self, carstate, command): # if off-track, steer to the track
+    def comp_2(self, carstate, show): # if off-track, steer to the track
     # bram's implementation
         control_vec = np.full(4, None)
         if carstate.distance_from_center > 1.03:
             control_vec[2] = -.4 # steer
         if carstate.distance_from_center < -1.03:
             control_vec[2] = .4 # steer
-        if any(control_vec != None):
+        if show and any(control_vec != None):
             print("competence level 2 engaged. override steering in order to stay on track or get on track")
         return control_vec
 
-    def comp_3_ddpg(self, carstate):
+    def comp_3_go(self, carstate, show):
+        # if there is nothing ahead, put the pedal to the metal
+        control_vec = np.full(4, None)
+        if carstate.distances_from_edge[9] > 150 and abs(carstate.angle) < 45 :
+            control_vec[0] = 1
+        if show and any(control_vec != None):
+            print("competence level 3 engaged. pedal to the metal \m/")
+        return control_vec
+
+    def comp_4_ddpg(self, carstate, show):
         # DDPG_model
         control_vec = np.full(4, None)
 
@@ -183,7 +205,8 @@ class MyDriver(Driver):
         control_vec[0] = predicted[0][1] # accelerator
         control_vec[1] = predicted[0][2] # brake
 
-        print("competence level 3 engaged. DDPG has the steering wheel")
+        if show and any(control_vec != None):
+            print("competence level 4 engaged. DDPG has the steering wheel")
 
         return control_vec
 
@@ -208,10 +231,10 @@ class MyDriver(Driver):
 
     def privilege(self, control):
         ratio = 1.9 # we find acceleration "ratio" times more important than brake
-        if control[0][0]*ratio > control[0][1]:
-            control[0][1] = 0
-        if control[0][1] > control[0][0]*ratio:
-            control[0][0] = 0
+        if control[0]*ratio > control[1]:
+            control[1] = 0
+        if control[1] > control[0]*ratio:
+            control[0] = 0
         return control
 
     def cva_priority(self, superior, inferior): # control vector according to priority
@@ -236,22 +259,29 @@ class MyDriver(Driver):
         # determine which competence level is required here
         # low competence levels have higher priority over
         # high competence levels if their criteria are met
-        control_vec = self.comp_minus1(carstate, command)
+        show = True
+        control_vec = self.comp_minus1(carstate, show)
         if any(control_vec == None):
-            inferior = self.comp_0(carstate, command)
+            inferior = self.comp_0(carstate, show)
             control_vec = self.cva_priority(control_vec, inferior)
             if any(control_vec == None):
-                inferior = self.comp_1(carstate, command)
+                inferior = self.comp_1(carstate, show)
                 control_vec = self.cva_priority(control_vec, inferior)
                 if any(control_vec == None):
-                    inferior = self.comp_2(carstate, command)
+                    inferior = self.comp_2(carstate, show)
                     control_vec = self.cva_priority(control_vec, inferior)
                     if any(control_vec == None):
-                        inferior = self.comp_3_ddpg(carstate)
+                        inferior = self.comp_3_go(carstate, show)
                         control_vec = self.cva_priority(control_vec, inferior)
                         if any(control_vec == None):
-                            inferior = self.gearbox(carstate)
+                            inferior = self.comp_4_ddpg(carstate, show)
                             control_vec = self.cva_priority(control_vec, inferior)
+                            if any(control_vec == None):
+                                inferior = self.gearbox(carstate)
+                                control_vec = self.cva_priority(control_vec, inferior)
+
+        control_vec = self.privilege(control_vec)
+        print(control_vec)
 
         command.accelerator = control_vec[0]
         command.brake = control_vec[1]
