@@ -109,20 +109,24 @@ class MyDriver(Driver):
         '''
         For swarm intelligence, check if the current car is bully or champion
         '''
-        if friend_carstate is None:
-            self.bully = False
+
+        if carstate is None:
+            return False
+
+        if friend_carstate is None or friend_carstate.get('distance_from_start') is None:
+            return False
 
         # If the car is in the end, it is a champion
-        if carstate.sensor_dict['racePos'] > 7:
-            self.bully = False
+        if int(carstate.sensor_dict['racePos']) > 7:
+            return False
 
         # If distance between cars is more than 60m, set the car as bully
-        distance_between_cars = friend_carstate.distance_from_start - carstate.distFromStart
-        if distance_between_cars > 60:
-            self.bully = True
+        distance_between_cars = int(friend_carstate['distance_from_start']) - carstate.distance_from_start
 
+        if distance_between_cars > 60:
+            return True
         if distance_between_cars < -60:
-            self.bully = False
+            return False
 
     def comp_minus1(self, carstate, show): # back up
     # bram's implementation
@@ -330,15 +334,20 @@ class MyDriver(Driver):
         else:
             self.standstill_counter = 0
 
+        friend_carstate = None
         # Read friend carstate
         if self.car_number and self.friend:
             if self.car_number > self.friend:
                 filepath = 'BAD2.json'
             else:
                 filepath = 'BAD1.json'
-            with open(filepath, 'r') as f:
-                friend_carstate = json.load(f)
-            self.is_bully(carstate, friend_carstate)
+            try:
+                with open(filepath, 'r') as f:
+                    friend_carstate = json.load(f)
+            except:
+                pass
+
+        self.bully = self.is_bully(carstate, friend_carstate)
 
         # determine which competence level is required here
         # low competence levels have higher priority over
