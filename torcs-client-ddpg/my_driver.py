@@ -23,7 +23,7 @@ class MyDriver(Driver):
 
         # bram variables for rule-based low competence levels:
         self.bully = False
-        self.speed_is_standstill = 13 # under which speed we consider ourselfs to be 'standing still'
+        self.speed_is_standstill = 14 # under which speed we consider ourselfs to be 'standing still'
         self.standstill_counter = 0
         self.angle_limit = 26
         self.engage_comp0 = 36 # after how many epochs standstill comp 0 engages
@@ -135,7 +135,7 @@ class MyDriver(Driver):
             if show:
                 print("competence level -1 engaged. Back up")
             control_vec[3] = -1 # gear
-            control_vec[0] = .16 # acc
+            control_vec[0] = .17 # acc
             control_vec[1] = 0 # brake
             if carstate.distance_from_center > 0:
                 control_vec[2] = .43 # steer
@@ -213,31 +213,34 @@ class MyDriver(Driver):
         control_vec[2] = predicted[0][0] # steering
         control_vec[0] = predicted[0][1] # accelerator
         control_vec[1] = predicted[0][2] # brake
+        if show:
+            print("Competence level 4 engaged. Ddpg at the wheel")
+
         return control_vec
 
     def rule_based_bully(self, carstate, control_vec, show):
-        if carstate.opponents[0] < 20 or carstate.opponents[35] < 20:
-            control_vec[0] *= .8
-            if show:
-                print("they're behind me, I'll slow down")
-
-        if any(carstate.opponents[1:4] < 12):
-            control_vec[0] *= .9
-            control_vec[2] -= .05
-        if any(carstate.opponents[30:34] < 12):
-            control_vec[0] *= .9
-            control_vec[2] += .05
-
-        if any(carstate.opponents[5:10] < 4):
-            if carstate.opponents[10] < 3:
-                control_vec[0] = 1
-            control_vec[2] -= .12
-
-        if any(carstate.opponents[24:29] < 4):
-            if carstate.opponents[24] < 3:
-                control_vec[0] = 1
-            control_vec[2] += .12
-
+        # if carstate.opponents[0] < 20 or carstate.opponents[35] < 20:
+        #     control_vec[0] *= .8
+        #     if show:
+        #         print("they're behind me, I'll slow down")
+        #
+        # if any(carstate.opponents[1:4] < 12):
+        #     control_vec[0] *= .9
+        #     control_vec[2] -= .05
+        # if any(carstate.opponents[30:34] < 12):
+        #     control_vec[0] *= .9
+        #     control_vec[2] += .05
+        #
+        # if any(carstate.opponents[5:10] < 4):
+        #     if carstate.opponents[10] < 3:
+        #         control_vec[0] = 1
+        #     control_vec[2] -= .12
+        #
+        # if any(carstate.opponents[24:29] < 4):
+        #     if carstate.opponents[24] < 3:
+        #         control_vec[0] = 1
+        #     control_vec[2] += .12
+        #
         if show:
             print("I am the bully")
 

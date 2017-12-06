@@ -149,14 +149,14 @@ class TorcsEnv:
         progress = sp*np.cos(obs['angle']) - np.abs(sp*np.sin(obs['angle'])) - sp*np.abs(obs['trackPos'])
         reward = progress
 
-        # collision detection
-        #if obs['damage'] - obs_pre['damage'] > 0:
-            #reward = -10
+        #collision detection
+        if obs['damage'] - obs_pre['damage'] > 0:
+            reward = -10
 
-        opponents = - np.array(obs['opponents']) + 200
-        # if any(opponents>0):
-        #     print("i see opponents. I'll bully them")
-        reward = reward + .01*sum(opponents)
+        # opponents = - np.array(obs['opponents']) + 200
+        # # if any(opponents>0):
+        # #     print("i see opponents. I'll bully them")
+        # reward = reward + .01*sum(opponents)
 
         # Termination judgement #########################
         episode_terminate = False
@@ -298,4 +298,4 @@ class TorcsEnv:
 
 
     def make_state(self, obs):
-        return np.hstack((obs.angle, obs.track, obs.trackPos, obs.speedX, obs.speedY,  obs.speedZ, obs.wheelSpinVel/100.0, obs.rpm, (1-obs.opponents/200.0)))
+        return np.hstack((obs.angle, obs.track, obs.trackPos, obs.speedX, obs.speedY,  obs.speedZ, obs.wheelSpinVel/100.0, obs.rpm))
