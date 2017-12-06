@@ -1,7 +1,7 @@
 import os
 import sys
-import pickle
 import json
+import math
 import numpy as np
 import collections as col
 from pytocl.driver import Driver
@@ -52,30 +52,9 @@ class MyDriver(Driver):
         # For Swarm intelligence
         self.communication_file = 'BAD.json'
         self.bully = False
-
-        # Read communication_file
-        with open(self.communication_file, 'r') as f:
-            self.data = json.load(f)
-        f.close()
-
-        if len(self.data.keys()) == 0:
-            self.car_number = '1'
-            self.data['1'] = {}
-        else:
-            self.car_number = '2'
-            self.data['2'] = {}
-
-        # Write to file
-        with open(self.communication_file, 'w') as f:
-            json.dump(self.data, f)
-        f.close()
-        # for i in range(1, 10):
-        #     try:
-        #         self.car_number = i
-        #         os.mkfifo(communication_file + str(i))
-        #         break
-        #     except OSError as e:
-        #         print("OS Error: ", e)
+        self.car_number = None
+        self.friend = None
+        self.steps = 0
 
     def BAD(self, control, acc = .5, brake = .5, privilege = "brak"):
         '''
@@ -275,23 +254,51 @@ class MyDriver(Driver):
                 superior[idx] = inferior[idx]
         return superior
 
+    def swarm_communication(self, carstate):
+        '''
+        For swarm intelligence - Establishing communication
+        1. Checks if car_number is assignend. If not assign current racePosition
+        2. If friend number is unknown
+            - If BAD file has both entries, then reads and assigns friend number
+        3. For each step (10m), car updates its racePos and distance_from_start
+        '''
+        # Happens only one time
+        if self.car_number is None:
+            self.car_number = int(carstate.sensor_dict['racePos'])
+            with open('BAD', 'a') as f:
+                f.write(str(self.car_number)+ ' ')
+
+        # Happens only one time
+        if self.car_number is not None and self.friend is None:
+            with open('BAD', 'r') as f:
+                text = f.read()
+            cars = text.strip().split()
+            if len(cars) == 2:
+                self.friend = cars[0] if cars[1] == str(self.car_number) else cars[1]
+                self.friend = int(self.friend)
+
+        # Update information to file only in certain steps
+        next_step = math.floor(carstate.distance_from_start / 10)
+
+        if self.car_number and self.friend:
+            if self.steps != next_step:
+                self.steps = next_step
+                information = {
+                    'racePos': carstate.sensor_dict['racePos'],
+                    'distance_from_start': carstate.distance_from_start
+                }
+                filepath = 'BAD1.json'
+
+                if self.car_number < self.friend:
+                    filepath = 'BAD2.json'
+                with open(filepath, 'w+') as f:
+                    json.dump(information, f)
+
     def drive(self, carstate: State) -> Command:
         '''
         Custom Drive Function
         '''
-        with open(self.communication_file, 'r') as f:
-            self.data = json.load(f)
-        f.close()
-
-        self.data[self.car_number] = 'hello'
-
-        with open(self.communication_file, 'w') as f:
-            json.dump(self.data, f)
-        f.close()
-
-        print("---- data, " + self.car_number + "------")
-        print(self.data)
-        print("-------------------------")
+        self.swarm_communication()
 
         command = Command()
 
@@ -346,26 +353,22 @@ class MyDriver(Driver):
 
         return command
 
+    def repel(self, carstate):
+        pass
 
-    def is_friend(self, carstate, friend_carstate):
-        '''
-        Find if the car is not opponent
-        '''
-        # TODO: this function is not complete
-
-        if abs(carstate.racePos - friend_carstate.racePos) == 1:
-            return True
+    def attract(self, carstate):
+        pass
 
     def is_bully(self, carstate, friend_carstate):
         '''
         For swarm intelligence, check if the current car is bully or champion
         '''
         if friend_carstate is None:
-            return False
+            self.bully = False
 
         # If the car is in the end, it is a champion
-        if carstate.racePos > 8:
-            return False
+        if carstate.sensor_dict['racePos'] > 7:
+            self.bully = False
 
         # If distance between cars is more than 60m, set the car as champion
         distance_between_cars = friend_carstate.distFromStart - carstate.distFromStart
