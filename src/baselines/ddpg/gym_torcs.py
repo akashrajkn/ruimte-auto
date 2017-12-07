@@ -161,9 +161,12 @@ class TorcsEnv:
         # Termination judgement #########################
         episode_terminate = False
         if (abs(track.any()) > 1 or abs(trackPos) > 1):  # Episode is terminated if the car is out of track
-            reward = reward - 40
+            reward = -100
             episode_terminate = True
             client.R.d['meta'] = True
+
+        # Disincentive for steering
+        reward -= abs(u[0])*10
 
 
         if self.terminal_judge_start < self.time_step: # Episode terminates if the progress of agent is small
@@ -265,6 +268,7 @@ class TorcsEnv:
 
             u[1] = (u[1]+1)/2
             u[2] = (u[2]+1)/2
+
             #u[2] = 0 #disable brake
             torcs_action.update({'accel': u[1]})
             torcs_action.update({'brake': u[2]})
