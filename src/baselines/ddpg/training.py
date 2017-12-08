@@ -50,7 +50,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
         if restore_prev_sess:
             #runstats_id = 'runstats-2017-12-01-13-31-44-861522'
             #runstats_id = 'first_10_min_of_bully_training_from_scratch'
-            runstats_id = 'runstats-2017-12-06-11-01-58-460076'
+            runstats_id = 'champ_dima26h_bram3'
             runstats_path = '../src/baselines/runstats/' + runstats_id + '/model_weights.ckpt'
             saver_past_sess = tf.train.Saver()
             saver_past_sess.restore(sess, runstats_path)

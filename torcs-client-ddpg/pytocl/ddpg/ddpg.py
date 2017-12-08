@@ -132,11 +132,15 @@ class DDPG(object):
         self.setup_actor_optimizer()
         self.setup_critic_optimizer()
         if self.normalize_returns and self.enable_popart:
+            print("both are not None")
             self.setup_popart()
         self.setup_stats()
         self.setup_target_network_updates()
 
     def setup_target_network_updates(self):
+
+        print("setup_target_network_updates")
+
         actor_init_updates, actor_soft_updates = get_target_updates(self.actor.vars, self.target_actor.vars, self.tau)
         critic_init_updates, critic_soft_updates = get_target_updates(self.critic.vars, self.target_critic.vars, self.tau)
         self.target_init_updates = [actor_init_updates, critic_init_updates]
@@ -166,6 +170,11 @@ class DDPG(object):
         actor_nb_params = sum([reduce(lambda x, y: x * y, shape) for shape in actor_shapes])
         logger.info('  actor shapes: {}'.format(actor_shapes))
         logger.info('  actor params: {}'.format(actor_nb_params))
+
+        print("--------")
+        print(self.actor)
+        print("--------")
+
         self.actor_grads = U.flatgrad(self.actor_loss, self.actor.trainable_vars, clip_norm=self.clip_norm)
         self.actor_optimizer = MpiAdam(var_list=self.actor.trainable_vars,
             beta1=0.9, beta2=0.999, epsilon=1e-08)
@@ -193,6 +202,9 @@ class DDPG(object):
             beta1=0.9, beta2=0.999, epsilon=1e-08)
 
     def setup_popart(self):
+
+        print("setup_popart")
+
         # See https://arxiv.org/pdf/1602.07714.pdf for details.
         self.old_std = tf.placeholder(tf.float32, shape=[1], name='old_std')
         new_std = self.ret_rms.std
@@ -211,6 +223,9 @@ class DDPG(object):
             self.renormalize_Q_outputs_op += [b.assign((b * self.old_std + self.old_mean - new_mean) / new_std)]
 
     def setup_stats(self):
+
+        print("setup_stats")
+
         ops = []
         names = []
 

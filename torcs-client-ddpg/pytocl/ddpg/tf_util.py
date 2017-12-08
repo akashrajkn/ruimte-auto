@@ -553,6 +553,14 @@ def intprod(x):
     return int(np.prod(x))
 
 def flatgrad(loss, var_list, clip_norm=None):
+
+    print("LOSOOOOSSS")
+    print(loss)
+
+    print("VAR")
+    print(var_list)
+
+
     grads = tf.gradients(loss, var_list)
     if clip_norm is not None:
         grads = [tf.clip_by_norm(grad, clip_norm=clip_norm) for grad in grads]

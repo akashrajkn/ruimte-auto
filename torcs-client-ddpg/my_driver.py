@@ -8,7 +8,7 @@ from pytocl.driver import Driver
 from pytocl.car import State, Command, DEGREE_PER_RADIANS, MPS_PER_KMH
 
 import tensorflow as tf
-from pytocl.ddpg.models import Actor, Critic
+from pytocl.ddpg.models import Actor_Bully, Critic_Bully, Actor_Champion, Critic_Champion
 from pytocl.ddpg.memory import Memory
 from pytocl.ddpg.ddpg import DDPG
 
@@ -21,40 +21,67 @@ class MyDriver(Driver):
         self.friend = None
         self.steps = 0
 
-        # bram variables for rule-based low competence levels:
+        # Bram variables for rule-based low competence levels:
         self.bully = False
         self.speed_is_standstill = 14 # under which speed we consider ourselfs to be 'standing still'
         self.standstill_counter = 0
-        self.angle_limit = 26
-        self.engage_comp0 = 36 # after how many epochs standstill comp 0 engages
-        self.engage_comp_neg1 = 180 # after how many epochs driving but not moving do we realise we are hitting the wall
-        self.dismiss_comp_neg1 = 580 # after how many epochs driving back are we going to go forward again (may be sooner if we hit enough speed)
+        self.angle_limit = 26 # larger angles than this need to be corrected with low competence levels
+        self.engage_comp0 = 36 # after how many timesteps standstill comp 0 engages
+        self.engage_comp_neg1 = 180 # after how many timesteps driving but not moving do we realise we are hitting the wall
+        self.dismiss_comp_neg1 = 580 # after how many timesteps driving back are we going to go forward again (may be sooner if we hit enough speed)
 
         # DDPG
         nb_actions = 3
         action_noise = None
         param_noise = None
-        memory = Memory(limit=int(1e6), action_shape=(3,), observation_shape=(29,))
-        critic = Critic(layer_norm=True)
-        actor = Actor(nb_actions, layer_norm=True)
+        memory_29 = Memory(limit=int(1e6), action_shape=(3,), observation_shape=(29,))
+        memory_65 = Memory(limit=int(1e6), action_shape=(3,), observation_shape=(65,))
+        critic_bully = Critic_Bully(layer_norm=True)
+        actor_bully = Actor_Bully(nb_actions, layer_norm=True)
+        critic_champion = Critic_Champion(layer_norm=True)
+        actor_champion = Actor_Champion(nb_actions, layer_norm=True)
 
-        self.champion_agent = DDPG(actor, critic, memory, (29,),  (3,),
+        # initialise the two ddpg drivers champion and bully with each their own tf.Graph
+        champ_graph = tf.Graph()
+        with champ_graph.as_default():
+            self.champ_agent = DDPG(actor_champion, critic_champion, memory_29, (29,),  (3,),
                     gamma=0.99, tau=0.01, normalize_returns=False,
                     normalize_observations=True,
                     batch_size=64, action_noise=action_noise, param_noise=param_noise,
                     critic_l2_reg=1e-2, actor_lr=1e-4, critic_lr=1e-3,
                     enable_popart=False, clip_norm=None, reward_scale=1.)
 
-        saver = tf.train.Saver()
-        self.sess = tf.Session()
+        bull_graph = tf.Graph()
+        with bull_graph.as_default():
+            self.bull_agent = DDPG(actor_bully, critic_bully, memory_65, (65,),  (3,),
+                    gamma=0.99, tau=0.01, normalize_returns=False,
+                    normalize_observations=True,
+                    batch_size=64, action_noise=action_noise, param_noise=param_noise,
+                    critic_l2_reg=1e-2, actor_lr=1e-4, critic_lr=1e-3,
+                    enable_popart=False, clip_norm=None, reward_scale=1.)
 
-        # Restore variables from disk.
-        runstats_id_champ = 'Dimas_champion_trained_11hrs'
-        runstats_path_champ = '../src/baselines/runstats/' + runstats_id_champ + '/model_weights.ckpt'
-        saver.restore(self.sess, runstats_path_champ)
+        self.champ_sess = tf.Session(graph=champ_graph)
+        self.bull_sess = tf.Session(graph=bull_graph)
+
+        # restore parameter settings for ddpg actors
+        with self.champ_sess.as_default():
+            with champ_graph.as_default():
+                tf.global_variables_initializer().run()
+                champ_saver = tf.train.Saver(tf.global_variables())
+                runstats_id_champ = 'champ_Dima20_Bram10'
+                runstats_path_champ = '../src/baselines/runstats/' + runstats_id_champ + '/model_weights.ckpt'
+                champ_saver.restore(self.champ_sess, runstats_path_champ)
+
+        with self.bull_sess.as_default():
+            with bull_graph.as_default():
+                tf.global_variables_initializer().run()
+                bull_saver = tf.train.Saver(tf.global_variables())
+                runstats_id_bull = 'Brams_bully_trained_2hrs'
+                runstats_path_bull = '../src/baselines/runstats/' + runstats_id_bull + '/model_weights.ckpt'
+                bull_saver.restore(self.bull_sess, runstats_path_bull)
 
     def convert_carstate_to_array(self, carstate, proc='nn'):
-        '''
+        ''' 
         Convert the carstate to np array
         '''
         if proc=='ddpg':
@@ -66,7 +93,8 @@ class MyDriver(Driver):
                                         obs.speedY,
                                         obs.speedZ,
                                         obs.wheelSpinVel/100.0,
-                                        obs.rpm))
+                                        obs.rpm,
+                                        (obs.opponents/-200.0)+1. ))
         return carstate_array
 
     def make_observation(self, raw_obs):
@@ -91,7 +119,13 @@ class MyDriver(Driver):
 
     def ddpg_driver(self, carstate):
         obs = self.convert_carstate_to_array(carstate, proc='ddpg')
-        command = self.champion_agent.act(obs, self.sess)
+        if self.is_bully:
+            command = self.bull_agent.act(obs, self.bull_sess)
+        else:
+            # the champion has been trained without seeing opponents
+            # hence it expects an input vector of size 29 instead of 65
+            command = self.champ_agent.act(obs[:29], self.champ_sess)
+
         # All actions are predicted in [-1, 1]; normalizing back:
         command[1] = (command[1]+1)/2
         command[2] = (command[2]+1)/2
@@ -218,33 +252,33 @@ class MyDriver(Driver):
 
         return control_vec
 
-    def rule_based_bully(self, carstate, control_vec, show):
-        # if carstate.opponents[0] < 20 or carstate.opponents[35] < 20:
-        #     control_vec[0] *= .8
-        #     if show:
-        #         print("they're behind me, I'll slow down")
-        #
-        # if any(carstate.opponents[1:4] < 12):
-        #     control_vec[0] *= .9
-        #     control_vec[2] -= .05
-        # if any(carstate.opponents[30:34] < 12):
-        #     control_vec[0] *= .9
-        #     control_vec[2] += .05
-        #
-        # if any(carstate.opponents[5:10] < 4):
-        #     if carstate.opponents[10] < 3:
-        #         control_vec[0] = 1
-        #     control_vec[2] -= .12
-        #
-        # if any(carstate.opponents[24:29] < 4):
-        #     if carstate.opponents[24] < 3:
-        #         control_vec[0] = 1
-        #     control_vec[2] += .12
-        #
-        if show:
-            print("I am the bully")
-
-        return control_vec
+    # def rule_based_bully(self, carstate, control_vec, show):
+    #     if carstate.opponents[0] < 20 or carstate.opponents[35] < 20:
+    #         control_vec[0] *= .8
+    #         if show:
+    #             print("they're behind me, I'll slow down")
+    #
+    #     if any(carstate.opponents[1:4] < 12):
+    #         control_vec[0] *= .9
+    #         control_vec[2] -= .05
+    #     if any(carstate.opponents[30:34] < 12):
+    #         control_vec[0] *= .9
+    #         control_vec[2] += .05
+    #
+    #     if any(carstate.opponents[5:10] < 4):
+    #         if carstate.opponents[10] < 3:
+    #             control_vec[0] = 1
+    #         control_vec[2] -= .12
+    #
+    #     if any(carstate.opponents[24:29] < 4):
+    #         if carstate.opponents[24] < 3:
+    #             control_vec[0] = 1
+    #         control_vec[2] += .12
+    #
+    #     if show:
+    #         print("I am the bully")
+    #
+    #     return control_vec
 
 
     def gearbox(self, carstate):
@@ -388,8 +422,8 @@ class MyDriver(Driver):
                         if any(control_vec == None):
                             inferior = self.comp_4_ddpg(carstate, show)
                             control_vec = self.cva_priority(control_vec, inferior)
-                            if self.bully:
-                                control_vec = self.rule_based_bully(carstate, control_vec, show)
+                            # if self.bully:
+                            #     control_vec = self.rule_based_bully(carstate, control_vec, show)
                             if any(control_vec == None):
                                 inferior = self.gearbox(carstate)
                                 control_vec = self.cva_priority(control_vec, inferior)
