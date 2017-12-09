@@ -68,7 +68,7 @@ class MyDriver(Driver):
             with champ_graph.as_default():
                 tf.global_variables_initializer().run()
                 champ_saver = tf.train.Saver(tf.global_variables())
-                runstats_id_champ = 'champ_Dima20_Bram10'
+                runstats_id_champ = 'champ-26h-eps-brake'
                 runstats_path_champ = '../src/baselines/runstats/' + runstats_id_champ + '/model_weights.ckpt'
                 champ_saver.restore(self.champ_sess, runstats_path_champ)
 
@@ -81,7 +81,7 @@ class MyDriver(Driver):
                 bull_saver.restore(self.bull_sess, runstats_path_bull)
 
     def convert_carstate_to_array(self, carstate, proc='nn'):
-        ''' 
+        '''
         Convert the carstate to np array
         '''
         if proc=='ddpg':
@@ -162,6 +162,16 @@ class MyDriver(Driver):
         if distance_between_cars < -60:
             return False
 
+    def comp_minus2(self, carstate, show): # start the race
+        control_vec = np.full(4, None)
+        if carstate.current_lap_time < 3.14159:
+            control_vec[0] = 1
+            control_vec[1] = 0
+            control_vec[3] = 1
+        if show and any(control_vec != None):
+            print("Run, Shadowfax; show us the meaning of haste")
+        return control_vec
+
     def comp_minus1(self, carstate, show): # back up
     # bram's implementation
         control_vec = np.full(4, None)
@@ -238,7 +248,19 @@ class MyDriver(Driver):
             print("competence level 3 engaged. pedal to the metal \m/")
         return control_vec
 
-    def comp_4_ddpg(self, carstate, show):
+    def comp_4_brake_for_turn(self, carstate, show):
+        control_vec = np.full(4, None)
+
+        brake = False
+        if carstate.distances_from_edge[9] < 70 and carstate.speed_x > 160:
+            brake = True
+
+        if show and brake:
+            print("Competence level 4 engaged. brake for turn")
+
+        return control_vec
+
+    def comp_5_ddpg(self, carstate, show):
         # DDPG_model
         control_vec = np.full(4, None)
         predicted = self.ddpg_driver(carstate)
@@ -248,7 +270,7 @@ class MyDriver(Driver):
         control_vec[0] = predicted[0][1] # accelerator
         control_vec[1] = predicted[0][2] # brake
         if show:
-            print("Competence level 4 engaged. Ddpg at the wheel")
+            print("Competence level 5 engaged. Ddpg at the wheel")
 
         return control_vec
 
@@ -284,7 +306,7 @@ class MyDriver(Driver):
     def gearbox(self, carstate):
         control_vec = np.full(4, None)
         control_vec[3] = carstate.gear or 1
-        if (carstate.rpm > 0 and carstate.gear == 0) or (carstate.rpm < 2000 and carstate.gear == 2):
+        if (carstate.rpm > 0 and carstate.gear == 0) or (carstate.rpm < 1000 and carstate.gear == 2):
             control_vec[3] = 1
         if carstate.rpm > 3200 and carstate.gear == 1 or (carstate.rpm < 3000 and carstate.gear == 3):
             control_vec[3] = 2
@@ -406,27 +428,31 @@ class MyDriver(Driver):
         # low competence levels have higher priority over
         # high competence levels if their criteria are met
         show = True
-        control_vec = self.comp_minus1(carstate, show)
+        control_vec = self.comp_minus2(carstate, show)
         if any(control_vec == None):
-            inferior = self.comp_0(carstate, show)
+            inferior = self.comp_minus1(carstate, show)
             control_vec = self.cva_priority(control_vec, inferior)
             if any(control_vec == None):
-                inferior = self.comp_1(carstate, show)
+                inferior = self.comp_0(carstate, show)
                 control_vec = self.cva_priority(control_vec, inferior)
                 if any(control_vec == None):
-                    inferior = self.comp_2(carstate, show)
+                    inferior = self.comp_1(carstate, show)
                     control_vec = self.cva_priority(control_vec, inferior)
                     if any(control_vec == None):
-                        inferior = self.comp_3_go(carstate, show)
+                        inferior = self.comp_2(carstate, show)
                         control_vec = self.cva_priority(control_vec, inferior)
                         if any(control_vec == None):
-                            inferior = self.comp_4_ddpg(carstate, show)
+                            inferior = self.comp_3_go(carstate, show)
                             control_vec = self.cva_priority(control_vec, inferior)
-                            # if self.bully:
-                            #     control_vec = self.rule_based_bully(carstate, control_vec, show)
                             if any(control_vec == None):
-                                inferior = self.gearbox(carstate)
+                                inferior = self.comp_4_brake_for_turn(carstate, show)
                                 control_vec = self.cva_priority(control_vec, inferior)
+                                if any(control_vec == None):
+                                    inferior = self.comp_5_ddpg(carstate, show)
+                                    control_vec = self.cva_priority(control_vec, inferior)
+                                    if any(control_vec == None):
+                                        inferior = self.gearbox(carstate)
+                                        control_vec = self.cva_priority(control_vec, inferior)
 
         #control_vec = self.privilege(control_vec)
 
