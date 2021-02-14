@@ -1,30 +1,37 @@
+import os
 import torch
 import numpy as np
 import dill as pickle
 
 from torch.autograd import Variable
 
-from pytocl.nn_linear_regression import LinearRegression
-from pytocl.pyESN_for_TORCS import ESN
 from pytocl.driver import Driver
 from pytocl.car import State, Command
+
+from pytocl.neural_net import FeedForwardRegression
+# from pytocl.echo_state_network import ESN
 
 
 class MyDriver(Driver):
     def __init__(self):
-        input_size = 21
-        hidden_size = 40
-        output_size = 3
-        self.nn_model = LinearRegression(input_size, output_size, hidden_size)
-        # self.nn_model.load_state_dict(torch.load('../../models/model_nn_regression.pkl'))
+        realpath = os.path.dirname(os.path.realpath(__file__))
 
-        # ESN
-        with open('/home/akashrajkn/Documents/github_projects/ruimte-auto/torcs-client/pytocl/esn.pkl', 'rb') as in_strm:
-            datastruct = pickle.load(in_strm)
+        # bram variables:
+        self.standstill_counter = 0
+        self.engage_comp0 = 36 # after how many epochs standstill comp 0 engages
+        self.engage_comp_neg1 = 250 # after how many epochs driving but not moving do we realise we are hitting the wall
+        self.dismiss_comp_neg1 = 600 # after how many epochs driving back are we going to go forward again (may be sooner if we hit enough speed)
 
-        self.esn = datastruct
-        self.reservoir = np.zeros(200)
-        self.control = np.zeros(3)
+        self.nn_model = FeedForwardRegression()
+        self.nn_model.load_state_dict(torch.load(realpath + '/../models/neural_net_regression.pkl'))
+
+        # # ESN
+        # with open('realpath + '/../models/esn.pkl', 'rb') as f:
+        #     esn_binary = pickle.load(f)
+        #
+        # self.esn =  esn_binary
+        # self.reservoir = np.zeros(200)
+        # self.control = np.zeros(3)
 
     def reservoir_computing(self, carstate, command):
 
@@ -39,7 +46,7 @@ class MyDriver(Driver):
 
     def convert_carstate_to_array(self, carstate):
         '''
-        Convert the carstate to numpy array
+        Convert the carstate to np array
         '''
         speed = carstate.speed_x
         track_position = carstate.distance_from_center
@@ -47,33 +54,177 @@ class MyDriver(Driver):
 
         sensors = list(carstate.distances_from_edge)
         # FIXME: NN model does not use one of the sensors
-        # sensors = sensors[:-1]
-
+        sensors = sensors[:-1]
         carstate_array = np.array([[speed, angle, track_position] + sensors], dtype=np.float32)
+
+        # carstate_array = np.array([speed, angle, track_position] + sensors)
 
         return carstate_array
 
+    def BAD(self, control_vec, t_acc = .5, t_brak = .5, privilege = "brak"):
+        # Bram Akash Dmitrii
+        # threshold acceleration and braking
+        # acceleration/braking privilege if both are 1
+
+        if control_vec[0][0] > t_acc:
+            control_vec[0][0] = 1
+        else:
+            control_vec[0][0] = 0
+        if control_vec[0][1] > t_brak:
+            control_vec[0][1] = 1
+        else:
+            control_vec[0][1] = 0
+        if privilege == "brak" and control_vec[0][1] == 1:
+            control_vec[0][0] = 0
+        if privilege == "acc" and control_vec[0][0] == 1:
+            control_vec[0][1] = 0
+        return control_vec
+
+    def comp_minus1(self, carstate, command): # back up
+    # bram's implementation
+        control_vec = np.full(4, None)
+        if self.standstill_counter > self.engage_comp_neg1:
+            print("competence level -1 engaged. Back up")
+            control_vec[3] = -1 # gear
+            control_vec[0] = .3 # acc
+            control_vec[1] = 0 # brake
+            if carstate.distance_from_center > 0:
+                control_vec[2] = .33 # steer
+            if carstate.distance_from_center < 0:
+                control_vec[2] = -.33
+        if self.standstill_counter > self.dismiss_comp_neg1:
+            print("ive backed up up long enough, hopefully there is space in front of me now")
+            self.standstill_counter = 0
+        return control_vec
+
+    def comp_0(self, carstate, command): # move
+        # bram's implementation
+        control_vec = np.full(4, None)
+        if self.standstill_counter > self.engage_comp0 and self.standstill_counter < self.engage_comp_neg1:
+            print("competence level 0 engaged. Move, dammit.")
+            control_vec[3] = 1 # gear
+            control_vec[0] = .5 # acc
+            control_vec[1] = 0 # brak
+            if carstate.distance_from_center > 0.1:
+                control_vec[2] = -.1 # steer
+            if carstate.distance_from_center < -0.1:
+                control_vec[2] = .1 # steer
+        return control_vec
+
+    def comp_1(self, carstate, command): # face the right way, don't drive backwards
+    # bram's implementation
+        control_vec = np.full(4, None)
+        if carstate.angle < -70 and carstate.angle > 70:
+            if carstate.speed_x < 30:
+                control_vec[3] = 1 # gear
+                control_vec[0] = .2 # acc
+                control_vec[1] = 0 # brak
+            else:
+                control_vec[0] = 0 # acc
+                control_vec[1] = .5 # brak
+        if carstate.angle < -70:
+            control_vec[2] = -.5 # steer
+        if carstate.angle > 70:
+            control_vec[2] = .5 # steer
+        if any(control_vec != None):
+            print("competence level 1 engaged. Trying to face the right way")
+        return control_vec
+
+    def comp_2(self, carstate, command): # if off-track, steer to the track
+    # bram's implementation
+        control_vec = np.full(4, None)
+        if carstate.distance_from_center > 1:
+            control_vec[2] = -.2 # steer
+        if carstate.distance_from_center < -1:
+            control_vec[2] = .2 # steer
+        if any(control_vec != None):
+            print("competence level 2 engaged. override steering in order to stay on track")
+        return control_vec
+
+    def comp_3_fNN(self, carstate):
+        # NN_MODEL
+        print("competence level 3, the neural net, determines the remaining controls")
+        control_vec = np.full(4, None)
+        x_test = self.convert_carstate_to_array(carstate)
+        predicted = self.nn_model(Variable(torch.from_numpy(x_test))).data.numpy()
+        #predicted = self.BAD(predicted, t_acc=.1, t_brak=.35, privilege="acc")
+        predicted = self.privilege(predicted)
+        control_vec[:3] = predicted[0]
+        return control_vec
+
+    def gearbox(self, carstate):
+        control_vec = np.full(4, None)
+        control_vec[3] = carstate.gear or 1
+        if (carstate.rpm > 0 and carstate.gear == 0) or (carstate.rpm < 1000 and carstate.gear == 2):
+            control_vec[3] = 1
+        if carstate.rpm > 1800 and carstate.gear == 1 or (carstate.rpm < 1000 and carstate.gear == 3):
+            control_vec[3] = 2
+        if carstate.rpm > 2500 and carstate.gear == 2 or (carstate.rpm < 1500 and carstate.gear == 4):
+            control_vec[3] = 3
+        if carstate.rpm > 3200 and carstate.gear == 3 or (carstate.rpm < 1800 and carstate.gear == 5):
+            control_vec[3] = 4
+        if carstate.rpm > 4000 and carstate.gear == 4 or (carstate.rpm < 2000 and carstate.gear == 6):
+            control_vec[3] = 5
+        if carstate.rpm > 5000 and carstate.gear == 5:
+            control_vec[3] = 6
+        return control_vec
+
+    def privilege(self, control):
+        ratio = 1.8 # we find acceleration "ratio" times more important than brake
+        if control[0][0]*ratio > control[0][1]:
+            control[0][1] = 0
+        if control[0][1] > control[0][0]*ratio:
+            control[0][0] = 0
+        return control
+
+    def cva_priority(self, superior, inferior): # control vector according to priority
+        # superior [ 1, 2, None, 4 ]
+        # inferior [ 5, None, 7, 8 ]
+        # return [1, 2, 7, 4]
+        for idx, value in enumerate(superior): # try this in list comprehension, it will be 1 line instead of 3
+            if value == None:
+                superior[idx] = inferior[idx]
+        return superior
+
     def drive(self, carstate: State) -> Command:
-        # # NN_MODEL
-        # x_test = self.convert_carstate_to_array(carstate)
-        # predicted = self.nn_model(Variable(torch.from_numpy(x_test))).data.numpy()
-        #
-        # command = Command()
-        #
-        # command.accelerator = predicted[0][0]
-        # command.brake = predicted[0][1]
-        # command.steering = predicted[0][2]
-        #
-        # # if carstate.rpm < 2500:
-        # #     command.gear = carstate.gear - 1
+        # competence levels:
+        # 0 move
+        # 1 don't drive backwards on the track
+        # 2 stay on the track
+        # 3 if on-track, finish the lap (by NN or ESN)
+        # 4 smarter stuff... (RL?)
 
         command = Command()
-        command = self.reservoir_computing(carstate, command)
 
-        if not command.gear:
-            command.gear = carstate.gear or 1
+        if abs(carstate.speed_x) < 5:
+            self.standstill_counter += 1
+        else:
+            self.standstill_counter = 0
+        # determine which competence level is required here
+        # low competence levels have higher priority over
+        # high competence levels if their criteria are met
+        control_vec = self.comp_minus1(carstate, command)
+        if any(control_vec == None):
+            inferior = self.comp_0(carstate, command)
+            control_vec = self.cva_priority(control_vec, inferior)
+            if any(control_vec == None):
+                inferior = self.comp_1(carstate, command)
+                control_vec = self.cva_priority(control_vec, inferior)
+                if any(control_vec == None):
+                    inferior = self.comp_2(carstate, command)
+                    control_vec = self.cva_priority(control_vec, inferior)
+                    if any(control_vec == None):
+                        inferior = self.comp_3_fNN(carstate)
+                        control_vec = self.cva_priority(control_vec, inferior)
+                        if any(control_vec == None):
+                            inferior = self.gearbox(carstate)
+                            control_vec = self.cva_priority(control_vec, inferior)
 
-        if carstate.rpm > 1500:
-            command.gear = carstate.gear + 1
+        command.accelerator = control_vec[0]
+        command.brake = control_vec[1]
+        command.steering = control_vec[2]
+        command.gear = control_vec[3]
+
+        print('-----------------')
 
         return command
